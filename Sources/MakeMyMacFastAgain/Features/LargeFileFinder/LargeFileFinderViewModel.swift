@@ -1,6 +1,13 @@
 import Foundation
 import AppKit
 
+struct FileTypeBreakdown: Identifiable, Sendable {
+    let id = UUID()
+    let type: String
+    let count: Int
+    let totalSize: UInt64
+}
+
 @MainActor
 @Observable
 final class LargeFileFinderViewModel {
@@ -30,12 +37,48 @@ final class LargeFileFinderViewModel {
         }
     }
 
+    private static let videoExtensions: Set<String> = ["mp4", "mov", "avi", "mkv"]
+    private static let diskImageExtensions: Set<String> = ["dmg", "iso", "img"]
+    private static let archiveExtensions: Set<String> = ["zip", "tar", "gz", "rar", "7z"]
+    private static let applicationExtensions: Set<String> = ["app"]
+    private static let documentExtensions: Set<String> = ["pdf", "docx", "xlsx"]
+
+    /// Groups files by extension category and returns a breakdown sorted by total size descending.
+    var typeBreakdown: [FileTypeBreakdown] {
+        var groups: [String: (count: Int, totalSize: UInt64)] = [:]
+
+        for file in files {
+            let ext = (file.name as NSString).pathExtension.lowercased()
+            let category = Self.extensionCategory(ext)
+
+            let existing = groups[category, default: (count: 0, totalSize: 0)]
+            groups[category] = (count: existing.count + 1, totalSize: existing.totalSize + file.size)
+        }
+
+        return groups.map { FileTypeBreakdown(type: $0.key, count: $0.value.count, totalSize: $0.value.totalSize) }
+            .sorted { $0.totalSize > $1.totalSize }
+    }
+
+    /// Total size of all found files.
+    var totalFilesSize: UInt64 {
+        files.reduce(0) { $0 + $1.size }
+    }
+
     var selectedFiles: [LargeFile] {
         files.filter { selectedFileIDs.contains($0.id) }
     }
 
     var totalSelectedSize: UInt64 {
         selectedFiles.reduce(0) { $0 + $1.size }
+    }
+
+    private static func extensionCategory(_ ext: String) -> String {
+        if videoExtensions.contains(ext) { return "Videos" }
+        if diskImageExtensions.contains(ext) { return "Disk Images" }
+        if archiveExtensions.contains(ext) { return "Archives" }
+        if applicationExtensions.contains(ext) { return "Applications" }
+        if documentExtensions.contains(ext) { return "Documents" }
+        return "Other"
     }
 
     func scan() async {

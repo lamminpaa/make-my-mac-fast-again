@@ -48,6 +48,26 @@ struct BrowserCleanupView: View {
         }
     }
 
+    /// Maps a browser name to its corresponding SF Symbol icon name.
+    private func browserIcon(_ name: String) -> String {
+        switch name {
+        case "Safari":
+            return "safari"
+        case "Google Chrome":
+            return "globe"
+        case "Firefox":
+            return "flame"
+        case "Microsoft Edge":
+            return "globe"
+        case "Arc":
+            return "globe"
+        case "Brave":
+            return "shield"
+        default:
+            return "globe"
+        }
+    }
+
     private var headerBar: some View {
         HStack {
             VStack(alignment: .leading) {
@@ -60,8 +80,19 @@ struct BrowserCleanupView: View {
 
             Spacer()
 
-            Toggle("Cache", isOn: $viewModel.cleanCache)
-            Toggle("Cookies", isOn: $viewModel.cleanCookies)
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle("Cache", isOn: $viewModel.cleanCache)
+                Text("Temporary files stored for faster page loads")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle("Cookies", isOn: $viewModel.cleanCookies)
+                Text("Login sessions and site preferences")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
 
             if viewModel.isScanning {
                 ProgressView()
@@ -80,8 +111,20 @@ struct BrowserCleanupView: View {
 
     private func browserRow(_ browser: BrowserProfile) -> some View {
         HStack {
+            Image(systemName: browserIcon(browser.browser))
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+
             Text(browser.browser)
                 .font(.body.bold())
+
+            if viewModel.isBrowserRunning(browser.browser) {
+                Label("Running", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .help("Close \(browser.browser) before cleaning for best results")
+            }
 
             Spacer()
 

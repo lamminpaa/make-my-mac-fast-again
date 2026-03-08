@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 @MainActor
 @Observable
@@ -14,6 +15,26 @@ final class BrowserCleanupViewModel {
 
     var totalCacheSize: UInt64 {
         browsers.filter(\.isInstalled).reduce(0) { $0 + $1.cacheSize }
+    }
+
+    /// Checks whether a browser is currently running by matching its name against running applications.
+    func isBrowserRunning(_ browser: String) -> Bool {
+        let runningApps = NSWorkspace.shared.runningApplications
+        let bundleIdentifierMap: [String: [String]] = [
+            "Safari": ["com.apple.Safari"],
+            "Google Chrome": ["com.google.Chrome"],
+            "Firefox": ["org.mozilla.firefox"],
+            "Microsoft Edge": ["com.microsoft.edgemac"],
+            "Arc": ["company.thebrowser.Browser"],
+            "Brave": ["com.brave.Browser"]
+        ]
+
+        guard let identifiers = bundleIdentifierMap[browser] else { return false }
+
+        return runningApps.contains { app in
+            guard let bundleID = app.bundleIdentifier else { return false }
+            return identifiers.contains(bundleID)
+        }
     }
 
     func loadBrowsers() {

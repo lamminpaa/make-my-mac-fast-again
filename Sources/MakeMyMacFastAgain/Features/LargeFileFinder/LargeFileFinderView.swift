@@ -25,43 +25,47 @@ struct LargeFileFinderView: View {
                 }
                 .frame(maxHeight: .infinity)
             } else {
-                Table(viewModel.files, selection: $viewModel.selectedFileIDs) {
-                    TableColumn("Name") { file in
-                        Text(file.name)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .width(min: 200)
+                VStack(spacing: 0) {
+                    fileTypeBreakdownSummary
 
-                    TableColumn("Size") { file in
-                        Text(ByteFormatter.format(file.size))
-                            .monospacedDigit()
-                    }
-                    .width(80)
-
-                    TableColumn("Path") { file in
-                        Text(file.path)
-                            .lineLimit(1)
-                            .truncationMode(.head)
-                            .foregroundStyle(.secondary)
-                            .font(.caption)
-                    }
-                    .width(min: 200)
-
-                    TableColumn("Modified") { file in
-                        Text(file.modifiedDate, style: .date)
-                            .foregroundStyle(.secondary)
-                    }
-                    .width(100)
-
-                    TableColumn("") { file in
-                        Button("Reveal") {
-                            viewModel.revealInFinder(file)
+                    Table(viewModel.files, selection: $viewModel.selectedFileIDs) {
+                        TableColumn("Name") { file in
+                            Text(file.name)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
                         }
-                        .buttonStyle(.borderless)
-                        .controlSize(.small)
+                        .width(min: 200)
+
+                        TableColumn("Size") { file in
+                            Text(ByteFormatter.format(file.size))
+                                .monospacedDigit()
+                        }
+                        .width(80)
+
+                        TableColumn("Path") { file in
+                            Text(file.path)
+                                .lineLimit(1)
+                                .truncationMode(.head)
+                                .foregroundStyle(.secondary)
+                                .font(.caption)
+                        }
+                        .width(min: 200)
+
+                        TableColumn("Modified") { file in
+                            Text(file.modifiedDate, style: .date)
+                                .foregroundStyle(.secondary)
+                        }
+                        .width(100)
+
+                        TableColumn("") { file in
+                            Button("Reveal") {
+                                viewModel.revealInFinder(file)
+                            }
+                            .buttonStyle(.borderless)
+                            .controlSize(.small)
+                        }
+                        .width(60)
                     }
-                    .width(60)
                 }
             }
 
@@ -74,6 +78,53 @@ struct LargeFileFinderView: View {
             }
         } message: {
             Text("Move \(viewModel.selectedFileIDs.count) files (\(ByteFormatter.format(viewModel.totalSelectedSize))) to Trash?")
+        }
+    }
+
+    private var fileTypeBreakdownSummary: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("\(viewModel.files.count) files found")
+                    .font(.callout.bold())
+                Text("(\(ByteFormatter.format(viewModel.totalFilesSize)) total)")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+
+            if !viewModel.typeBreakdown.isEmpty {
+                HStack(spacing: 12) {
+                    ForEach(viewModel.typeBreakdown) { breakdown in
+                        HStack(spacing: 4) {
+                            Image(systemName: typeIcon(breakdown.type))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(breakdown.type)
+                                    .font(.caption.bold())
+                                Text("\(breakdown.count) files, \(ByteFormatter.format(breakdown.totalSize))")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    Spacer()
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(.bar)
+    }
+
+    private func typeIcon(_ type: String) -> String {
+        switch type {
+        case "Videos": return "film"
+        case "Disk Images": return "opticaldiscdrive"
+        case "Archives": return "archivebox"
+        case "Applications": return "app"
+        case "Documents": return "doc.text"
+        default: return "doc"
         }
     }
 
