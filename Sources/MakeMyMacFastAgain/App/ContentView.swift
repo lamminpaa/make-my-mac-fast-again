@@ -10,6 +10,11 @@ struct ContentView: View {
         } detail: {
             detailView
         }
+        .onAppear {
+            ScreenshotController.shared.onSelectItem = { item in
+                selectedItem = item
+            }
+        }
     }
 
     private var sidebar: some View {
