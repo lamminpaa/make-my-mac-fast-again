@@ -35,11 +35,9 @@ struct DashboardView: View {
                         detail: "of \(ByteFormatter.format(viewModel.diskStats.totalSpace))"
                     )
 
-                    GaugeCard(
-                        title: "Network",
-                        value: 0,
-                        subtitle: ByteFormatter.formatRate(viewModel.networkStats.rateIn),
-                        detail: ByteFormatter.formatRate(viewModel.networkStats.rateOut)
+                    NetworkCard(
+                        rateIn: viewModel.networkStats.rateIn,
+                        rateOut: viewModel.networkStats.rateOut
                     )
                 }
 

@@ -6,7 +6,25 @@ struct CacheCleanerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            headerBar
+            FeatureHeader(title: "Cache Cleaner", subtitle: "Remove cached files to free up disk space") {
+                if viewModel.isScanning {
+                    ProgressView()
+                        .controlSize(.small)
+                        .padding(.trailing, 8)
+                }
+
+                Button("Rescan") {
+                    Task { await viewModel.scanSizes() }
+                }
+                .disabled(viewModel.isScanning || viewModel.isCleaning)
+
+                Button("Clean Selected") {
+                    showConfirmation = true
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .disabled(viewModel.totalSelectedSize == 0 || viewModel.isCleaning)
+            }
 
             if viewModel.categories.isEmpty {
                 ContentUnavailableView(
@@ -21,7 +39,10 @@ struct CacheCleanerView: View {
                 }
             }
 
-            statusBar
+            StatusBar(message: viewModel.statusMessage, isLoading: viewModel.isCleaning) {
+                Text("Total: \(ByteFormatter.format(viewModel.totalSize))")
+                    .font(.caption.bold())
+            }
         }
         .task {
             viewModel.loadCategories()
@@ -35,39 +56,6 @@ struct CacheCleanerView: View {
         } message: {
             Text("This will permanently delete \(ByteFormatter.format(viewModel.totalSelectedSize)) of cached data. This action cannot be undone.")
         }
-    }
-
-    private var headerBar: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("Cache Cleaner")
-                    .font(.title2.bold())
-                Text("Remove cached files to free up disk space")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            if viewModel.isScanning {
-                ProgressView()
-                    .controlSize(.small)
-                    .padding(.trailing, 8)
-            }
-
-            Button("Rescan") {
-                Task { await viewModel.scanSizes() }
-            }
-            .disabled(viewModel.isScanning || viewModel.isCleaning)
-
-            Button("Clean Selected") {
-                showConfirmation = true
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
-            .disabled(viewModel.totalSelectedSize == 0 || viewModel.isCleaning)
-        }
-        .padding()
     }
 
     private func cacheRow(index: Int) -> some View {
@@ -99,21 +87,4 @@ struct CacheCleanerView: View {
         .padding(.vertical, 4)
     }
 
-    private var statusBar: some View {
-        HStack {
-            if viewModel.isCleaning {
-                ProgressView()
-                    .controlSize(.small)
-            }
-            Text(viewModel.statusMessage)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text("Total: \(ByteFormatter.format(viewModel.totalSize))")
-                .font(.caption.bold())
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(.bar)
-    }
 }
