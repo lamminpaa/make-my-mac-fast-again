@@ -44,6 +44,7 @@ struct AppProcessInfo: Identifiable, Sendable {
     let name: String
     let user: String
     var cpuUsage: Double
+    var cpuPercentage: Double = 0
     var memoryBytes: UInt64
     var status: String
 }

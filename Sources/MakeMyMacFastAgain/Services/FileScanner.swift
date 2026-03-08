@@ -79,7 +79,7 @@ actor FileScanner {
         guard let enumerator = fileManager.enumerator(
             at: url,
             includingPropertiesForKeys: [.fileSizeKey],
-            options: [.skipsHiddenFiles]
+            options: []
         ) else {
             return 0
         }

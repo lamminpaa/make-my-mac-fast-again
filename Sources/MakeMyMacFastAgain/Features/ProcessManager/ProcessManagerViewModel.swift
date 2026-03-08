@@ -13,6 +13,9 @@ final class ProcessManagerViewModel {
     private let processService = ProcessService()
     private let shell = ShellExecutor()
     private var timer: Timer?
+    private var previousCPUTimes: [pid_t: Double] = [:]
+    private let refreshInterval: Double = 3.0
+    private let numCPUs = Foundation.ProcessInfo.processInfo.processorCount
 
     enum SortOrder: String, CaseIterable {
         case memory = "Memory"
@@ -37,7 +40,7 @@ final class ProcessManagerViewModel {
         case .memory:
             return filtered.sorted { $0.memoryBytes > $1.memoryBytes }
         case .cpu:
-            return filtered.sorted { $0.cpuUsage > $1.cpuUsage }
+            return filtered.sorted { $0.cpuPercentage > $1.cpuPercentage }
         case .name:
             return filtered.sorted { $0.name.lowercased() < $1.name.lowercased() }
         case .pid:
@@ -47,7 +50,7 @@ final class ProcessManagerViewModel {
 
     func startMonitoring() {
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.refresh()
             }
@@ -60,7 +63,23 @@ final class ProcessManagerViewModel {
     }
 
     func refresh() {
-        processes = processService.listProcesses()
+        var currentProcesses = processService.listProcesses()
+        var newCPUTimes: [pid_t: Double] = [:]
+
+        for i in currentProcesses.indices {
+            let pid = currentProcesses[i].pid
+            let currentTime = currentProcesses[i].cpuUsage
+            newCPUTimes[pid] = currentTime
+
+            if let previousTime = previousCPUTimes[pid] {
+                let delta = currentTime - previousTime
+                let percentage = delta / (refreshInterval * 1_000_000_000 * Double(numCPUs)) * 100
+                currentProcesses[i].cpuPercentage = max(0, percentage)
+            }
+        }
+
+        previousCPUTimes = newCPUTimes
+        processes = currentProcesses
         statusMessage = "\(processes.count) processes"
     }
 

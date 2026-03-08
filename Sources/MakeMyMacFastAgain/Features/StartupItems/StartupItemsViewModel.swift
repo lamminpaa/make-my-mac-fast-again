@@ -13,23 +13,40 @@ final class StartupItemsViewModel {
         isLoading = true
         items = []
 
+        let loadedLabels = await getLoadedLabels()
         let home = FileManager.default.homeDirectoryForCurrentUser.path
 
         // User LaunchAgents
         let userAgentPath = "\(home)/Library/LaunchAgents"
-        await loadPlistsFrom(path: userAgentPath, type: .userAgent)
+        loadPlistsFrom(path: userAgentPath, type: .userAgent, loadedLabels: loadedLabels)
 
         // Global LaunchAgents
-        await loadPlistsFrom(path: "/Library/LaunchAgents", type: .globalAgent)
+        loadPlistsFrom(path: "/Library/LaunchAgents", type: .globalAgent, loadedLabels: loadedLabels)
 
         // Global LaunchDaemons
-        await loadPlistsFrom(path: "/Library/LaunchDaemons", type: .globalDaemon)
+        loadPlistsFrom(path: "/Library/LaunchDaemons", type: .globalDaemon, loadedLabels: loadedLabels)
 
         isLoading = false
         statusMessage = "Found \(items.count) startup items."
     }
 
-    private func loadPlistsFrom(path: String, type: StartupItemType) async {
+    private func getLoadedLabels() async -> Set<String> {
+        do {
+            let result = try await shell.run("launchctl list")
+            var labels = Set<String>()
+            for line in result.output.split(separator: "\n").dropFirst() {
+                let parts = line.split(separator: "\t")
+                if parts.count >= 3 {
+                    labels.insert(String(parts[2]))
+                }
+            }
+            return labels
+        } catch {
+            return []
+        }
+    }
+
+    private func loadPlistsFrom(path: String, type: StartupItemType, loadedLabels: Set<String>) {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(atPath: path) else { return }
 
@@ -44,8 +61,7 @@ final class StartupItemsViewModel {
             let label = plist["Label"] as? String ?? file.replacingOccurrences(of: ".plist", with: "")
             let disabled = plist["Disabled"] as? Bool ?? false
 
-            // Check if loaded via launchctl
-            let isLoaded = await checkIfLoaded(label: label, type: type)
+            let isLoaded = loadedLabels.contains(label)
 
             let name = label.components(separatedBy: ".").last ?? label
 
@@ -56,24 +72,6 @@ final class StartupItemsViewModel {
                 isEnabled: !disabled && isLoaded,
                 type: type
             ))
-        }
-    }
-
-    private func checkIfLoaded(label: String, type: StartupItemType) async -> Bool {
-        do {
-            let domain: String
-            switch type {
-            case .userAgent:
-                let uid = getuid()
-                domain = "gui/\(uid)/\(label)"
-            case .globalAgent, .globalDaemon:
-                domain = "system/\(label)"
-            }
-
-            let result = try await shell.run("launchctl print \(domain) 2>/dev/null")
-            return result.succeeded
-        } catch {
-            return false
         }
     }
 

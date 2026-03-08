@@ -36,6 +36,12 @@ struct ProcessManagerView: View {
                 }
                 .width(80)
 
+                TableColumn("CPU %") { process in
+                    Text(String(format: "%.1f%%", process.cpuPercentage))
+                        .monospacedDigit()
+                }
+                .width(60)
+
                 TableColumn("Status") { process in
                     Text(process.status)
                         .foregroundStyle(.secondary)
