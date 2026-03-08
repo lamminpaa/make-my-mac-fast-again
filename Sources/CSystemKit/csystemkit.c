@@ -5,6 +5,61 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <ctype.h>
+
+// Returns 1 if the string looks like a version number (only digits and dots, e.g. "2.1.34")
+static int is_version_string(const char *str) {
+    if (!str || !*str) return 0;
+    int has_dot = 0;
+    int has_digit = 0;
+    for (const char *p = str; *p; p++) {
+        if (*p == '.') {
+            has_dot = 1;
+        } else if (isdigit((unsigned char)*p)) {
+            has_digit = 1;
+        } else {
+            return 0;
+        }
+    }
+    return has_dot && has_digit;
+}
+
+// Try to extract a meaningful name from a parent path component.
+// Walks backwards from `end` (which points to the '/' before the version component)
+// looking for a .app bundle name or the previous path component.
+static const char *resolve_name_from_path(const char *path, const char *end) {
+    if (end <= path) return NULL;
+
+    // Walk back to find the start of the previous component
+    const char *component_end = end; // points to '/'
+    const char *p = component_end - 1;
+    while (p > path && *p != '/') {
+        p--;
+    }
+    const char *component_start = (*p == '/') ? p + 1 : p;
+    size_t comp_len = (size_t)(component_end - component_start);
+
+    if (comp_len == 0) return NULL;
+
+    // Check if this component ends with ".app"
+    if (comp_len > 4 && strncmp(component_end - 4, ".app", 4) == 0) {
+        // Return pointer to the component start; caller must handle the .app stripping
+        return component_start;
+    }
+
+    // If the component itself is also a version string, keep walking up
+    // Make a temporary copy to check
+    char tmp[256];
+    if (comp_len >= sizeof(tmp)) return NULL;
+    memcpy(tmp, component_start, comp_len);
+    tmp[comp_len] = '\0';
+
+    if (is_version_string(tmp)) {
+        return resolve_name_from_path(path, component_start - 1);
+    }
+
+    return component_start;
+}
 
 int csk_get_process_info(pid_t pid, CSKProcessInfo *info) {
     if (!info) return -1;
@@ -16,13 +71,39 @@ int csk_get_process_info(pid_t pid, CSKProcessInfo *info) {
     char pathbuf[PROC_PIDPATHINFO_MAXSIZE];
     if (proc_pidpath(pid, pathbuf, sizeof(pathbuf)) > 0) {
         // Extract just the executable name from the path
-        const char *name = strrchr(pathbuf, '/');
-        if (name) {
-            name++; // skip the slash
+        const char *last_slash = strrchr(pathbuf, '/');
+        const char *name = last_slash ? last_slash + 1 : pathbuf;
+
+        // If the name looks like a version number, try to get a better name from the path
+        if (is_version_string(name) && last_slash) {
+            const char *better = resolve_name_from_path(pathbuf, last_slash);
+            if (better) {
+                // Calculate the component length
+                const char *comp_end = last_slash;
+                // Find the end of this component (next '/')
+                // better points to start of component, comp_end points to '/' after it
+                // But we need to find where this component ends
+                const char *ce = better;
+                while (*ce && *ce != '/') ce++;
+                size_t comp_len = (size_t)(ce - better);
+
+                // Strip .app suffix if present
+                if (comp_len > 4 && strncmp(ce - 4, ".app", 4) == 0) {
+                    comp_len -= 4;
+                }
+
+                if (comp_len > 0 && comp_len < sizeof(info->name)) {
+                    memcpy(info->name, better, comp_len);
+                    info->name[comp_len] = '\0';
+                } else {
+                    strncpy(info->name, name, sizeof(info->name) - 1);
+                }
+            } else {
+                strncpy(info->name, name, sizeof(info->name) - 1);
+            }
         } else {
-            name = pathbuf;
+            strncpy(info->name, name, sizeof(info->name) - 1);
         }
-        strncpy(info->name, name, sizeof(info->name) - 1);
     } else {
         // Fallback: try proc_name
         proc_name(pid, info->name, sizeof(info->name));
