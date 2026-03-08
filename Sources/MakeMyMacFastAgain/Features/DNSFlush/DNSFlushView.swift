@@ -6,10 +6,15 @@ struct DNSFlushView: View {
     var body: some View {
         VStack(spacing: 0) {
             FeatureHeader(title: "DNS Cache Flush", subtitle: "Resolve connectivity issues by clearing stale DNS records") {
-                if viewModel.isFlushing {
+                if viewModel.isFlushing || viewModel.isTestingServers {
                     ProgressView()
                         .controlSize(.small)
                 }
+
+                Button("Test Servers") {
+                    Task { await viewModel.testDNSServers() }
+                }
+                .disabled(viewModel.isTestingServers)
 
                 Button("Flush DNS Cache") {
                     Task { await viewModel.flushDNS() }
@@ -57,6 +62,12 @@ struct DNSFlushView: View {
                                         Text(server)
                                             .font(.callout.monospaced())
                                             .foregroundStyle(.secondary)
+
+                                        if let latency = viewModel.serverLatencies[server] {
+                                            Text(latency)
+                                                .font(.caption.monospaced())
+                                                .foregroundStyle(latency == "timeout" ? .red : .green)
+                                        }
                                     }
                                 }
                             }
@@ -71,6 +82,29 @@ struct DNSFlushView: View {
                             Text("Loading DNS configuration...")
                                 .foregroundStyle(.secondary)
                         }
+                    }
+                }
+
+                Section("Suggested DNS Servers") {
+                    ForEach(viewModel.dnsPresets, id: \.server) { preset in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(preset.name)
+                                    .font(.body.bold())
+                                Text(preset.server)
+                                    .font(.callout.monospaced())
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            if let latency = viewModel.serverLatencies[preset.server] {
+                                Text(latency)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(latency == "timeout" ? .red : .green)
+                            }
+                        }
+                        .padding(.vertical, 2)
                     }
                 }
             }

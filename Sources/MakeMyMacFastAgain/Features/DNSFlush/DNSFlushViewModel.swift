@@ -6,6 +6,11 @@ struct DNSServerInfo: Sendable {
     let domain: String?
 }
 
+struct DNSPreset: Sendable {
+    let name: String
+    let server: String
+}
+
 @MainActor
 @Observable
 final class DNSFlushViewModel {
@@ -15,6 +20,14 @@ final class DNSFlushViewModel {
     var flushSucceeded: Bool?
     var dnsServers: [DNSServerInfo] = []
     var isLoadingDNS = false
+    var serverLatencies: [String: String] = [:]
+    var isTestingServers = false
+
+    let dnsPresets: [DNSPreset] = [
+        DNSPreset(name: "Cloudflare", server: "1.1.1.1"),
+        DNSPreset(name: "Google", server: "8.8.8.8"),
+        DNSPreset(name: "OpenDNS", server: "208.67.222.222"),
+    ]
 
     private let privilegedExecutor = PrivilegedExecutor()
     private let shell = ShellExecutor()
@@ -47,6 +60,51 @@ final class DNSFlushViewModel {
         }
 
         isFlushing = false
+    }
+
+    func testDNSServers() async {
+        isTestingServers = true
+        serverLatencies = [:]
+
+        // Collect all unique server IPs from current config and presets
+        var serversToTest = Set<String>()
+        for info in dnsServers {
+            for server in info.servers {
+                serversToTest.insert(server)
+            }
+        }
+        for preset in dnsPresets {
+            serversToTest.insert(preset.server)
+        }
+
+        for server in serversToTest {
+            do {
+                let result = try await shell.run("ping -c 1 -t 2 \(server)")
+                // Parse round-trip time from ping output
+                // Example line: "round-trip min/avg/max/stddev = 1.234/1.234/1.234/0.000 ms"
+                if let rtLine = result.output.components(separatedBy: "\n").last(where: { $0.contains("round-trip") }) {
+                    let parts = rtLine.components(separatedBy: "=")
+                    if parts.count >= 2 {
+                        let values = parts[1].trimmingCharacters(in: .whitespaces).components(separatedBy: "/")
+                        if values.count >= 2 {
+                            // Use the avg value (second field)
+                            let avgMs = values[1].trimmingCharacters(in: .whitespaces)
+                            if let ms = Double(avgMs) {
+                                serverLatencies[server] = String(format: "%.0fms", ms)
+                            } else {
+                                serverLatencies[server] = "\(avgMs)ms"
+                            }
+                        }
+                    }
+                } else if result.exitCode != 0 {
+                    serverLatencies[server] = "timeout"
+                }
+            } catch {
+                serverLatencies[server] = "timeout"
+            }
+        }
+
+        isTestingServers = false
     }
 
     private func parseDNSOutput(_ output: String) -> [DNSServerInfo] {

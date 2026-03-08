@@ -6,12 +6,17 @@ final class StartupItemsViewModel {
     var items: [StartupItem] = []
     var isLoading = false
     var statusMessage = ""
+    var runningStatus: [String: Bool] = [:]
+    var impactLevel: [String: String] = [:]
 
     private let shell = ShellExecutor()
+    private let privilegedExecutor = PrivilegedExecutor()
 
     func loadItems() async {
         isLoading = true
         items = []
+        runningStatus = [:]
+        impactLevel = [:]
 
         let loadedLabels = await getLoadedLabels()
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -25,6 +30,8 @@ final class StartupItemsViewModel {
 
         // Global LaunchDaemons
         loadPlistsFrom(path: "/Library/LaunchDaemons", type: .globalDaemon, loadedLabels: loadedLabels)
+
+        await checkRunningStatus()
 
         isLoading = false
         statusMessage = "Found \(items.count) startup items."
@@ -65,6 +72,18 @@ final class StartupItemsViewModel {
 
             let name = label.components(separatedBy: ".").last ?? label
 
+            // Determine impact level based on plist keys
+            let keepAlive = plist["KeepAlive"]
+            let runAtLoad = plist["RunAtLoad"] as? Bool ?? false
+
+            if keepAlive != nil {
+                impactLevel[label] = "High"
+            } else if runAtLoad {
+                impactLevel[label] = "Medium"
+            } else {
+                impactLevel[label] = "Low"
+            }
+
             items.append(StartupItem(
                 name: name.capitalized,
                 path: fullPath,
@@ -72,6 +91,35 @@ final class StartupItemsViewModel {
                 isEnabled: !disabled && isLoaded,
                 type: type
             ))
+        }
+    }
+
+    func checkRunningStatus() async {
+        do {
+            let result = try await shell.run("launchctl list")
+            var pidByLabel: [String: String] = [:]
+            for line in result.output.split(separator: "\n").dropFirst() {
+                let parts = line.split(separator: "\t")
+                if parts.count >= 3 {
+                    let pidStr = String(parts[0])
+                    let label = String(parts[2])
+                    // A PID of "-" means the service is not currently running
+                    pidByLabel[label] = pidStr
+                }
+            }
+
+            for item in items {
+                if let pidStr = pidByLabel[item.label], pidStr != "-" {
+                    runningStatus[item.label] = true
+                } else {
+                    runningStatus[item.label] = false
+                }
+            }
+        } catch {
+            // If we can't check, mark all as unknown (false)
+            for item in items {
+                runningStatus[item.label] = false
+            }
         }
     }
 
@@ -90,7 +138,15 @@ final class StartupItemsViewModel {
                 domain = "system"
             }
 
-            _ = try await shell.run("launchctl \(action) \(domain)/\(item.label)")
+            let command = "launchctl \(action) \(domain)/\(item.label)"
+
+            switch item.type {
+            case .userAgent:
+                _ = try await shell.run(command)
+            case .globalAgent, .globalDaemon:
+                _ = try await privilegedExecutor.run(command)
+            }
+
             items[index].isEnabled.toggle()
             statusMessage = "\(item.name) \(items[index].isEnabled ? "enabled" : "disabled")."
         } catch {
