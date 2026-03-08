@@ -41,6 +41,18 @@ final class CPUMonitor {
         }
 
         if let prev = previousTicks {
+            // Guard against counter wraparound: if any current value is less than
+            // the previous value, skip this sample and just update previousTicks.
+            if totalUser < prev.user || totalSystem < prev.system ||
+               totalIdle < prev.idle || totalNice < prev.nice {
+                previousTicks = (user: totalUser, system: totalSystem, idle: totalIdle, nice: totalNice)
+
+                let size = Int(numCPUInfo) * MemoryLayout<integer_t>.stride
+                vm_deallocate(mach_task_self_, vm_address_t(bitPattern: info), vm_size_t(size))
+
+                return stats
+            }
+
             let deltaUser = totalUser - prev.user
             let deltaSystem = totalSystem - prev.system
             let deltaIdle = totalIdle - prev.idle

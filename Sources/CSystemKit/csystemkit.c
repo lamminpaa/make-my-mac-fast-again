@@ -87,8 +87,9 @@ int csk_get_process_info(pid_t pid, CSKProcessInfo *info) {
                 while (*ce && *ce != '/') ce++;
                 size_t comp_len = (size_t)(ce - better);
 
-                // Strip .app suffix if present
-                if (comp_len > 4 && strncmp(ce - 4, ".app", 4) == 0) {
+                // Strip .app suffix if present, with bounds check
+                const char *suffix_start = ce - 4;
+                if (comp_len > 4 && suffix_start >= better && strncmp(suffix_start, ".app", 4) == 0) {
                     comp_len -= 4;
                 }
 
