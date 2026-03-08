@@ -19,10 +19,11 @@ actor ShellExecutor {
         process.standardError = errorPipe
 
         try process.run()
-        process.waitUntilExit()
 
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
         let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+
+        process.waitUntilExit()
 
         let output = String(data: outputData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let errorOutput = String(data: errorData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
