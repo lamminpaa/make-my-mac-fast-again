@@ -12,8 +12,11 @@ final class CPUMonitor {
         var cpuInfo: processor_info_array_t?
         var numCPUInfo: mach_msg_type_number_t = 0
 
+        let host = mach_host_self()
+        defer { mach_port_deallocate(mach_task_self_, host) }
+
         let result = host_processor_info(
-            mach_host_self(),
+            host,
             PROCESSOR_CPU_LOAD_INFO,
             &numCPUs,
             &cpuInfo,

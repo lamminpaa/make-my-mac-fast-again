@@ -24,7 +24,7 @@ struct MemoryStats: Sendable {
 struct DiskStats: Sendable {
     var totalSpace: UInt64 = 0
     var freeSpace: UInt64 = 0
-    var usedSpace: UInt64 { totalSpace - freeSpace }
+    var usedSpace: UInt64 { totalSpace > freeSpace ? totalSpace - freeSpace : 0 }
     var usagePercentage: Double {
         guard totalSpace > 0 else { return 0 }
         return Double(usedSpace) / Double(totalSpace) * 100
