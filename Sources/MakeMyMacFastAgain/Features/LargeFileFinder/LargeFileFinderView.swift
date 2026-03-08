@@ -14,6 +14,16 @@ struct LargeFileFinderView: View {
                     systemImage: "doc.text.magnifyingglass",
                     description: Text("Click Scan to search for large files in your home directory.")
                 )
+                .frame(maxHeight: .infinity)
+            } else if viewModel.files.isEmpty && viewModel.isScanning {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .controlSize(.large)
+                    Text("Scanning \(viewModel.filesScanned) files...")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxHeight: .infinity)
             } else {
                 Table(viewModel.files, selection: $viewModel.selectedFileIDs) {
                     TableColumn("Name") { file in

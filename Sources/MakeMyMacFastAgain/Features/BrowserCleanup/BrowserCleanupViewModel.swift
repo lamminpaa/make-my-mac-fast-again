@@ -106,13 +106,13 @@ final class BrowserCleanupViewModel {
 
             if cleanCache {
                 for path in browser.cachePaths {
-                    freedSpace += removePath(path)
+                    freedSpace += await removePath(path)
                 }
             }
 
             if cleanCookies {
                 for path in browser.cookiePaths {
-                    freedSpace += removePath(path)
+                    freedSpace += await removePath(path)
                 }
             }
         }
@@ -122,32 +122,28 @@ final class BrowserCleanupViewModel {
         await scanSizes()
     }
 
-    private func removePath(_ path: String) -> UInt64 {
+    private func removePath(_ path: String) async -> UInt64 {
         let fm = FileManager.default
         guard fm.fileExists(atPath: path) else { return 0 }
 
+        let sizeBefore = await fileScanner.calculateDirectorySize(path)
+
         do {
             let attrs = try fm.attributesOfItem(atPath: path)
-            let size = attrs[.size] as? UInt64 ?? 0
 
             if (attrs[.type] as? FileAttributeType) == .typeDirectory {
                 let contents = try fm.contentsOfDirectory(atPath: path)
-                var totalFreed: UInt64 = 0
                 for item in contents {
-                    let itemPath = "\(path)/\(item)"
-                    if let itemAttrs = try? fm.attributesOfItem(atPath: itemPath),
-                       let itemSize = itemAttrs[.size] as? UInt64 {
-                        totalFreed += itemSize
-                    }
-                    try fm.removeItem(atPath: itemPath)
+                    try? fm.removeItem(atPath: "\(path)/\(item)")
                 }
-                return totalFreed
             } else {
                 try fm.removeItem(atPath: path)
-                return size
             }
         } catch {
-            return 0
+            // Continue — partial cleanup still counts
         }
+
+        let sizeAfter = await fileScanner.calculateDirectorySize(path)
+        return sizeBefore > sizeAfter ? sizeBefore - sizeAfter : 0
     }
 }

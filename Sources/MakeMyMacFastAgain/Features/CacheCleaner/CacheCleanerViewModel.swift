@@ -105,25 +105,24 @@ final class CacheCleanerViewModel {
                 let fileManager = FileManager.default
                 guard fileManager.fileExists(atPath: path) else { continue }
 
+                let sizeBefore = await fileScanner.calculateDirectorySize(path)
+
                 if category.requiresAdmin {
                     do {
                         _ = try await privilegedExecutor.run("rm -rf '\(path)'/*")
-                        freedSpace += category.size
                     } catch {
                         statusMessage = "Failed to clean \(category.name): \(error.localizedDescription)"
                     }
                 } else {
-                    do {
-                        let contents = try fileManager.contentsOfDirectory(atPath: path)
-                        for item in contents {
-                            let itemPath = "\(path)/\(item)"
-                            try fileManager.removeItem(atPath: itemPath)
-                        }
-                        freedSpace += category.size
-                    } catch {
-                        statusMessage = "Failed to clean \(category.name): \(error.localizedDescription)"
+                    let contents = (try? fileManager.contentsOfDirectory(atPath: path)) ?? []
+                    for item in contents {
+                        let itemPath = "\(path)/\(item)"
+                        try? fileManager.removeItem(atPath: itemPath)
                     }
                 }
+
+                let sizeAfter = await fileScanner.calculateDirectorySize(path)
+                freedSpace += sizeBefore > sizeAfter ? sizeBefore - sizeAfter : 0
             }
         }
 

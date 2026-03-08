@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ProcessManagerView: View {
@@ -49,16 +50,25 @@ struct ProcessManagerView: View {
                 }
                 .width(70)
 
-                TableColumn("") { process in
-                    Button("Kill") {
+            }
+            .contextMenu(forSelectionType: AppProcessInfo.ID.self) { pids in
+                if let pid = pids.first,
+                   let process = viewModel.processes.first(where: { $0.pid == pid }) {
+                    Button("Kill (SIGTERM)") {
                         processToKill = process
                         showKillConfirmation = true
                     }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.red)
-                    .controlSize(.small)
+                    Button("Force Kill (SIGKILL)") {
+                        processToKill = process
+                        showKillConfirmation = true
+                    }
+                    Divider()
+                    Button("Reveal in Activity Monitor") {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Activity Monitor.app"))
+                    }
                 }
-                .width(40)
+            } primaryAction: { pids in
+                // Double-click: no-op
             }
 
             statusBar
@@ -106,6 +116,15 @@ struct ProcessManagerView: View {
                 }
             }
             .frame(width: 150)
+
+            Button("Kill Selected") {
+                if let pid = viewModel.selectedProcessID,
+                   let process = viewModel.processes.first(where: { $0.pid == pid }) {
+                    processToKill = process
+                    showKillConfirmation = true
+                }
+            }
+            .disabled(viewModel.selectedProcessID == nil)
 
             Button("Refresh") {
                 viewModel.refresh()
