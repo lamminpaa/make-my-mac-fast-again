@@ -7,11 +7,21 @@ struct MemoryOptimizerView: View {
         ScrollView {
             VStack(spacing: 20) {
                 headerBar
+                memoryPressureIndicator
                 memoryGauge
+
+                if let freed = viewModel.lastPurgeFreed {
+                    lastPurgeFreedCard(freed: freed)
+                }
+
                 memoryBreakdown
 
                 if viewModel.showResult {
                     purgeResultCard
+                }
+
+                if !viewModel.purgeHistory.isEmpty {
+                    purgeHistorySection
                 }
             }
             .padding()
@@ -159,6 +169,64 @@ struct MemoryOptimizerView: View {
             }
         }
         .padding()
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var memoryPressureIndicator: some View {
+        HStack {
+            Text("Memory Pressure:")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(viewModel.memoryPressureLevel.label)
+                .font(.caption.bold())
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(pressureColor.opacity(0.2), in: Capsule())
+                .foregroundStyle(pressureColor)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var pressureColor: Color {
+        switch viewModel.memoryPressureLevel {
+        case .normal: return .green
+        case .warning: return .yellow
+        case .critical: return .red
+        }
+    }
+
+    private func lastPurgeFreedCard(freed: UInt64) -> some View {
+        HStack {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            Text("Last purge freed \(ByteFormatter.format(freed))")
+                .font(.callout.bold())
+            Spacer()
+        }
+        .padding()
+        .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var purgeHistorySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Purge History")
+                .font(.headline)
+
+            ForEach(viewModel.purgeHistory) { entry in
+                HStack {
+                    Text(entry.date, style: .relative)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 120, alignment: .leading)
+                    Spacer()
+                    Text("Freed \(ByteFormatter.format(entry.freed))")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.green)
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 }

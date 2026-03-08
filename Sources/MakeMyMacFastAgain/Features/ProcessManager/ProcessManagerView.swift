@@ -38,8 +38,9 @@ struct ProcessManagerView: View {
                 .width(80)
 
                 TableColumn("CPU %") { process in
-                    Text(String(format: "%.1f%%", process.cpuPercentage))
+                    Text(process.cpuPercentage == 0 ? "-" : String(format: "%.1f%%", process.cpuPercentage))
                         .monospacedDigit()
+                        .foregroundStyle(process.cpuPercentage == 0 ? .tertiary : .primary)
                 }
                 .width(60)
 
@@ -105,6 +106,14 @@ struct ProcessManagerView: View {
             }
 
             Spacer()
+
+            Picker("Filter:", selection: $viewModel.selectedFilter) {
+                ForEach(ProcessManagerViewModel.ProcessFilter.allCases, id: \.self) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 280)
 
             TextField("Search...", text: $viewModel.searchText)
                 .textFieldStyle(.roundedBorder)

@@ -11,6 +11,10 @@ final class DashboardViewModel {
     var systemName: String = ""
     var macOSVersion: String = ""
     var uptime: String = ""
+    var cpuHistory: [Double] = []
+    var memoryHistory: [Double] = []
+
+    private static let maxHistorySamples = 30
 
     private let cpuMonitor = CPUMonitor()
     private let memoryMonitor = MemoryMonitor()
@@ -40,6 +44,16 @@ final class DashboardViewModel {
         diskStats = diskMonitor.read()
         networkStats = networkMonitor.read()
         uptime = formatUptime()
+
+        cpuHistory.append(cpuStats.totalUsage)
+        if cpuHistory.count > Self.maxHistorySamples {
+            cpuHistory.removeFirst(cpuHistory.count - Self.maxHistorySamples)
+        }
+
+        memoryHistory.append(memoryStats.usagePercentage)
+        if memoryHistory.count > Self.maxHistorySamples {
+            memoryHistory.removeFirst(memoryHistory.count - Self.maxHistorySamples)
+        }
     }
 
     private func loadSystemInfo() {

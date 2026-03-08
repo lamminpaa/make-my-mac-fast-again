@@ -6,6 +6,7 @@ final class ProcessManagerViewModel {
     var processes: [AppProcessInfo] = []
     var searchText = ""
     var sortOrder: SortOrder = .memory
+    var selectedFilter: ProcessFilter = .allProcesses
     var isLoading = false
     var statusMessage = ""
     var selectedProcessID: pid_t?
@@ -16,20 +17,43 @@ final class ProcessManagerViewModel {
     private var previousCPUTimes: [pid_t: Double] = [:]
     private let refreshInterval: Double = 3.0
     private let numCPUs = Foundation.ProcessInfo.processInfo.processorCount
+    private let currentUsername = NSUserName()
 
-    enum SortOrder: String, CaseIterable {
+    enum SortOrder: String, CaseIterable, Sendable {
         case memory = "Memory"
         case cpu = "CPU"
         case name = "Name"
         case pid = "PID"
     }
 
+    enum ProcessFilter: String, CaseIterable, Sendable {
+        case allProcesses = "All"
+        case myProcesses = "My Processes"
+        case applications = "Apps"
+        case system = "System"
+    }
+
     var filteredProcesses: [AppProcessInfo] {
-        let filtered: [AppProcessInfo]
-        if searchText.isEmpty {
+        var filtered: [AppProcessInfo]
+
+        // Apply process type filter
+        switch selectedFilter {
+        case .allProcesses:
             filtered = processes
-        } else {
+        case .myProcesses:
+            filtered = processes.filter { $0.user == currentUsername }
+        case .applications:
+            filtered = processes.filter { !$0.name.isEmpty && $0.name.first?.isUppercase == true }
+        case .system:
             filtered = processes.filter {
+                $0.user == "root" || $0.user == "_windowserver" ||
+                $0.user.hasPrefix("_") || $0.user == "daemon"
+            }
+        }
+
+        // Apply search text filter
+        if !searchText.isEmpty {
+            filtered = filtered.filter {
                 $0.name.localizedCaseInsensitiveContains(searchText) ||
                 $0.user.localizedCaseInsensitiveContains(searchText) ||
                 String($0.pid).contains(searchText)

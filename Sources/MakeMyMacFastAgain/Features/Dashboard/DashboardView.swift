@@ -41,6 +41,8 @@ struct DashboardView: View {
                     )
                 }
 
+                sparklineSection
+
                 networkDetailCard
 
                 memoryBreakdownCard
@@ -122,6 +124,70 @@ struct DashboardView: View {
                 .frame(width: 100, alignment: .leading)
             Text(ByteFormatter.format(bytes))
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var sparklineSection: some View {
+        HStack(spacing: 16) {
+            SparklineCard(
+                title: "CPU History (60s)",
+                samples: viewModel.cpuHistory,
+                color: .blue
+            )
+            SparklineCard(
+                title: "Memory History (60s)",
+                samples: viewModel.memoryHistory,
+                color: .orange
+            )
+        }
+    }
+}
+
+private struct SparklineCard: View {
+    let title: String
+    let samples: [Double]
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            SparklineChart(samples: samples, color: color)
+                .frame(width: 200, height: 40)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct SparklineChart: View {
+    let samples: [Double]
+    let color: Color
+
+    var body: some View {
+        Canvas { context, size in
+            guard samples.count > 1 else { return }
+            let maxSamples = 30
+            let barWidth = size.width / CGFloat(maxSamples)
+            let maxValue = max(samples.max() ?? 100, 1)
+
+            for (index, value) in samples.enumerated() {
+                let barHeight = CGFloat(value / maxValue) * size.height
+                let x = CGFloat(index) * barWidth
+                let rect = CGRect(
+                    x: x,
+                    y: size.height - barHeight,
+                    width: max(barWidth - 1, 1),
+                    height: barHeight
+                )
+                context.fill(
+                    Path(roundedRect: rect, cornerRadius: 1),
+                    with: .color(color.opacity(0.7))
+                )
+            }
         }
     }
 }
