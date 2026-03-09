@@ -36,6 +36,7 @@ struct StartupItemsView: View {
                         }
                     }
                 }
+                .listStyle(.inset(alternatesRowBackgrounds: true))
             }
 
             StatusBar(message: viewModel.statusMessage, isLoading: false) {

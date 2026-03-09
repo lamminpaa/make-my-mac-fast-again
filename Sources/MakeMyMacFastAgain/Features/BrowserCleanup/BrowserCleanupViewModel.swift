@@ -40,6 +40,24 @@ final class BrowserCleanupViewModel {
     func loadBrowsers() {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
 
+        let chromeCachePaths = chromiumProfilePaths(
+            appSupportDir: "\(home)/Library/Application Support/Google/Chrome",
+            cacheDir: "\(home)/Library/Caches/Google/Chrome",
+            subpath: "Service Worker/CacheStorage"
+        )
+
+        let edgeCachePaths = chromiumProfilePaths(
+            appSupportDir: "\(home)/Library/Application Support/Microsoft Edge",
+            cacheDir: "\(home)/Library/Caches/Microsoft Edge",
+            subpath: "Service Worker/CacheStorage"
+        )
+
+        let braveCachePaths = chromiumProfilePaths(
+            appSupportDir: "\(home)/Library/Application Support/BraveSoftware/Brave-Browser",
+            cacheDir: "\(home)/Library/Caches/BraveSoftware/Brave-Browser",
+            subpath: "Service Worker/CacheStorage"
+        )
+
         browsers = [
             BrowserProfile(
                 browser: "Safari",
@@ -53,13 +71,8 @@ final class BrowserCleanupViewModel {
             ),
             BrowserProfile(
                 browser: "Google Chrome",
-                cachePaths: [
-                    "\(home)/Library/Caches/Google/Chrome",
-                    "\(home)/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage"
-                ],
-                cookiePaths: [
-                    "\(home)/Library/Application Support/Google/Chrome/Default/Cookies"
-                ]
+                cachePaths: ["\(home)/Library/Caches/Google/Chrome"] + chromeCachePaths.cache,
+                cookiePaths: chromeCachePaths.cookies
             ),
             BrowserProfile(
                 browser: "Firefox",
@@ -70,12 +83,8 @@ final class BrowserCleanupViewModel {
             ),
             BrowserProfile(
                 browser: "Microsoft Edge",
-                cachePaths: [
-                    "\(home)/Library/Caches/Microsoft Edge"
-                ],
-                cookiePaths: [
-                    "\(home)/Library/Application Support/Microsoft Edge/Default/Cookies"
-                ]
+                cachePaths: ["\(home)/Library/Caches/Microsoft Edge"] + edgeCachePaths.cache,
+                cookiePaths: edgeCachePaths.cookies
             ),
             BrowserProfile(
                 browser: "Arc",
@@ -86,12 +95,8 @@ final class BrowserCleanupViewModel {
             ),
             BrowserProfile(
                 browser: "Brave",
-                cachePaths: [
-                    "\(home)/Library/Caches/BraveSoftware/Brave-Browser"
-                ],
-                cookiePaths: [
-                    "\(home)/Library/Application Support/BraveSoftware/Brave-Browser/Default/Cookies"
-                ]
+                cachePaths: ["\(home)/Library/Caches/BraveSoftware/Brave-Browser"] + braveCachePaths.cache,
+                cookiePaths: braveCachePaths.cookies
             )
         ]
 
@@ -100,6 +105,51 @@ final class BrowserCleanupViewModel {
             let hasCache = browsers[i].cachePaths.contains { FileManager.default.fileExists(atPath: $0) }
             browsers[i].isInstalled = hasCache
         }
+    }
+
+    /// Discovers all Chromium profile directories (Default, Profile 1, Profile 2, etc.)
+    /// and returns their cache and cookie paths.
+    private func chromiumProfilePaths(
+        appSupportDir: String,
+        cacheDir: String?,
+        subpath: String
+    ) -> (cache: [String], cookies: [String]) {
+        let fm = FileManager.default
+        var cachePaths: [String] = []
+        var cookiePaths: [String] = []
+
+        guard fm.fileExists(atPath: appSupportDir) else {
+            return (cache: [], cookies: [])
+        }
+
+        do {
+            let contents = try fm.contentsOfDirectory(atPath: appSupportDir)
+            let profileDirs = contents.filter { $0 == "Default" || $0.hasPrefix("Profile ") }
+
+            for profile in profileDirs {
+                let profilePath = "\(appSupportDir)/\(profile)"
+                let cacheStoragePath = "\(profilePath)/\(subpath)"
+                if fm.fileExists(atPath: cacheStoragePath) {
+                    cachePaths.append(cacheStoragePath)
+                }
+                let cookiesPath = "\(profilePath)/Cookies"
+                if fm.fileExists(atPath: cookiesPath) {
+                    cookiePaths.append(cookiesPath)
+                }
+            }
+        } catch {
+            // Fall back to Default profile only
+            let defaultCache = "\(appSupportDir)/Default/\(subpath)"
+            if fm.fileExists(atPath: defaultCache) {
+                cachePaths.append(defaultCache)
+            }
+            let defaultCookies = "\(appSupportDir)/Default/Cookies"
+            if fm.fileExists(atPath: defaultCookies) {
+                cookiePaths.append(defaultCookies)
+            }
+        }
+
+        return (cache: cachePaths, cookies: cookiePaths)
     }
 
     func scanSizes() async {

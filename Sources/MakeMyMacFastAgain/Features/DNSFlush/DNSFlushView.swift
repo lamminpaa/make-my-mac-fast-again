@@ -108,6 +108,7 @@ struct DNSFlushView: View {
                     }
                 }
             }
+            .listStyle(.inset(alternatesRowBackgrounds: true))
 
             StatusBar(message: viewModel.lastFlushDate.map { "Last flushed: \(Self.relativeFormatter.localizedString(for: $0, relativeTo: Date()))" } ?? "DNS cache has not been flushed this session", isLoading: false) {
                 EmptyView()
