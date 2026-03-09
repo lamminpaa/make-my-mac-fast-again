@@ -12,12 +12,21 @@ struct CacheCleanerView: View {
                     ProgressView()
                         .controlSize(.small)
                         .padding(.trailing, 8)
+
+                    Button("Cancel") {
+                        viewModel.cancelScan()
+                    }
+                } else {
+                    Button("Rescan") {
+                        Task { await viewModel.scanSizes() }
+                    }
+                    .disabled(viewModel.isCleaning)
                 }
 
-                Button("Rescan") {
-                    Task { await viewModel.scanSizes() }
+                if !viewModel.categories.isEmpty {
+                    Button("Select All") { viewModel.selectAll() }
+                    Button("Deselect All") { viewModel.deselectAll() }
                 }
-                .disabled(viewModel.isScanning || viewModel.isCleaning)
 
                 Button("Clean Selected") {
                     showConfirmation = true
@@ -38,6 +47,7 @@ struct CacheCleanerView: View {
                         cacheRow(index: index)
                     }
                 }
+                .listStyle(.inset(alternatesRowBackgrounds: true))
             }
 
             StatusBar(message: viewModel.statusMessage, isLoading: viewModel.isCleaning) {

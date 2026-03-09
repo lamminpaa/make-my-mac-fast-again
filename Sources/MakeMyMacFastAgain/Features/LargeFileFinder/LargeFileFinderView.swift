@@ -6,7 +6,43 @@ struct LargeFileFinderView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            headerBar
+            FeatureHeader(title: "Large File Finder", subtitle: "Find and remove large files from your home directory") {
+                Picker("Min size:", selection: $viewModel.selectedMinSize) {
+                    ForEach(LargeFileFinderViewModel.MinFileSize.allCases, id: \.self) { size in
+                        Text(size.rawValue).tag(size)
+                    }
+                }
+                .frame(width: 180)
+
+                if viewModel.isScanning {
+                    ProgressView()
+                        .controlSize(.small)
+
+                    Button("Cancel") {
+                        viewModel.cancelScan()
+                    }
+                } else {
+                    Button("Scan") {
+                        Task { await viewModel.scan() }
+                    }
+                }
+
+                if !viewModel.files.isEmpty {
+                    Button("Select All") {
+                        viewModel.selectedFileIDs = Set(viewModel.files.map(\.id))
+                    }
+                    Button("Select None") {
+                        viewModel.selectedFileIDs = []
+                    }
+                }
+
+                Button("Move to Trash") {
+                    showConfirmation = true
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .disabled(viewModel.selectedFileIDs.isEmpty)
+            }
 
             if viewModel.files.isEmpty && !viewModel.isScanning {
                 ContentUnavailableView(
@@ -69,7 +105,15 @@ struct LargeFileFinderView: View {
                 }
             }
 
-            statusBar
+            StatusBar(
+                message: viewModel.isScanning ? "Scanned \(viewModel.filesScanned) files..." : viewModel.statusMessage,
+                isLoading: viewModel.isScanning
+            ) {
+                if !viewModel.selectedFileIDs.isEmpty {
+                    Text("\(viewModel.selectedFileIDs.count) selected (\(ByteFormatter.format(viewModel.totalSelectedSize)))")
+                        .font(.caption.bold())
+                }
+            }
         }
         .alert("Confirm Move to Trash", isPresented: $showConfirmation) {
             Button("Cancel", role: .cancel) {}
@@ -128,66 +172,4 @@ struct LargeFileFinderView: View {
         }
     }
 
-    private var headerBar: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("Large File Finder")
-                    .font(.title2.bold())
-                Text("Find and remove large files from your home directory")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Picker("Min size:", selection: $viewModel.selectedMinSize) {
-                ForEach(LargeFileFinderViewModel.MinFileSize.allCases, id: \.self) { size in
-                    Text(size.rawValue).tag(size)
-                }
-            }
-            .frame(width: 180)
-
-            if viewModel.isScanning {
-                ProgressView()
-                    .controlSize(.small)
-            }
-
-            Button("Scan") {
-                Task { await viewModel.scan() }
-            }
-            .disabled(viewModel.isScanning)
-
-            Button("Move to Trash") {
-                showConfirmation = true
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
-            .disabled(viewModel.selectedFileIDs.isEmpty)
-        }
-        .padding()
-    }
-
-    private var statusBar: some View {
-        HStack {
-            if viewModel.isScanning {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Scanned \(viewModel.filesScanned) files...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text(viewModel.statusMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            if !viewModel.selectedFileIDs.isEmpty {
-                Text("\(viewModel.selectedFileIDs.count) selected (\(ByteFormatter.format(viewModel.totalSelectedSize)))")
-                    .font(.caption.bold())
-            }
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(.bar)
-    }
 }
