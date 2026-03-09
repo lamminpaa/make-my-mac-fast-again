@@ -12,15 +12,6 @@ actor FileScanner {
         minSize: UInt64,
         onProgress: @Sendable @escaping (ScanProgress) -> Void
     ) async -> [LargeFile] {
-        let results = _scanForLargeFiles(in: directory, minSize: minSize, onProgress: onProgress)
-        return results.sorted { $0.size > $1.size }
-    }
-
-    private nonisolated func _scanForLargeFiles(
-        in directory: String,
-        minSize: UInt64,
-        onProgress: @Sendable (ScanProgress) -> Void
-    ) -> [LargeFile] {
         var results: [LargeFile] = []
         var progress = ScanProgress(filesScanned: 0, largeFilesFound: 0, currentPath: "")
 
@@ -35,10 +26,15 @@ actor FileScanner {
             return results
         }
 
-        for case let fileURL as URL in enumerator {
+        let allURLs = enumerator.compactMap { $0 as? URL }
+
+        for fileURL in allURLs {
+            if Task.isCancelled { break }
+
             progress.filesScanned += 1
 
-            if progress.filesScanned % 500 == 0 {
+            if progress.filesScanned % 100 == 0 {
+                await Task.yield()
                 progress.currentPath = fileURL.lastPathComponent
                 onProgress(progress)
             }
@@ -65,7 +61,7 @@ actor FileScanner {
         progress.currentPath = "Scan complete"
         onProgress(progress)
 
-        return results
+        return results.sorted { $0.size > $1.size }
     }
 
     func calculateDirectorySize(_ path: String) async -> UInt64 {

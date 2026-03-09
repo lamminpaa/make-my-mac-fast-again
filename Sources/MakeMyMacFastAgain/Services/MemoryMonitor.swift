@@ -30,7 +30,7 @@ final class MemoryMonitor {
         stats.compressed = UInt64(vmStats.compressor_page_count) * pageSize
         stats.free = UInt64(vmStats.free_count) * pageSize
 
-        stats.used = stats.active + stats.wired + stats.compressed
+        stats.used = stats.active + stats.wired + stats.compressed + stats.inactive
 
         return stats
     }

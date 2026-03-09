@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 @MainActor
 @Observable
@@ -12,11 +13,9 @@ final class ProcessManagerViewModel {
     var selectedProcessID: pid_t?
 
     private let processService = ProcessService()
-    private let shell = ShellExecutor()
     private var timer: Timer?
     private var previousCPUTimes: [pid_t: Double] = [:]
     private let refreshInterval: Double = 3.0
-    private let numCPUs = Foundation.ProcessInfo.processInfo.processorCount
     private let currentUsername = NSUserName()
 
     enum SortOrder: String, CaseIterable, Sendable {
@@ -97,7 +96,7 @@ final class ProcessManagerViewModel {
 
             if let previousTime = previousCPUTimes[pid] {
                 let delta = currentTime - previousTime
-                let percentage = delta / (refreshInterval * 1_000_000_000 * Double(numCPUs)) * 100
+                let percentage = delta / (refreshInterval * 1_000_000_000) * 100
                 currentProcesses[i].cpuPercentage = max(0, percentage)
             }
         }
@@ -108,27 +107,24 @@ final class ProcessManagerViewModel {
     }
 
     func killProcess(_ process: AppProcessInfo) async {
-        do {
-            _ = try await shell.run("kill \(process.pid)")
+        let result = kill(process.pid, SIGTERM)
+        if result == 0 {
             statusMessage = "Sent SIGTERM to \(process.name) (PID \(process.pid))"
-
-            // Wait briefly then refresh
-            try? await Task.sleep(for: .milliseconds(500))
-            refresh()
-        } catch {
-            statusMessage = "Failed to kill \(process.name): \(error.localizedDescription)"
+        } else {
+            statusMessage = "Failed to kill \(process.name): \(String(cString: strerror(errno)))"
         }
+        try? await Task.sleep(for: .milliseconds(500))
+        refresh()
     }
 
     func forceKillProcess(_ process: AppProcessInfo) async {
-        do {
-            _ = try await shell.run("kill -9 \(process.pid)")
+        let result = kill(process.pid, SIGKILL)
+        if result == 0 {
             statusMessage = "Sent SIGKILL to \(process.name) (PID \(process.pid))"
-
-            try? await Task.sleep(for: .milliseconds(500))
-            refresh()
-        } catch {
-            statusMessage = "Failed to force kill \(process.name): \(error.localizedDescription)"
+        } else {
+            statusMessage = "Failed to force kill \(process.name): \(String(cString: strerror(errno)))"
         }
+        try? await Task.sleep(for: .milliseconds(500))
+        refresh()
     }
 }
