@@ -26,9 +26,8 @@ actor FileScanner {
             return results
         }
 
-        let allURLs = enumerator.compactMap { $0 as? URL }
-
-        for fileURL in allURLs {
+        while let obj = enumerator.nextObject() {
+            guard let fileURL = obj as? URL else { continue }
             if Task.isCancelled { break }
 
             progress.filesScanned += 1
