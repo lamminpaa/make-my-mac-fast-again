@@ -18,6 +18,7 @@ final class CacheCleanerViewModel {
     private let fileScanner = FileScanner()
     private let shell = ShellExecutor()
     private let privilegedExecutor = PrivilegedExecutor()
+    private var scanTask: Task<Void, Never>?
 
     var totalSelectedSize: UInt64 {
         categories.filter(\.isSelected).reduce(0) { $0 + $1.size }
@@ -94,16 +95,29 @@ final class CacheCleanerViewModel {
         isScanning = true
         statusMessage = "Scanning cache sizes..."
 
-        for i in categories.indices {
-            var totalSize: UInt64 = 0
-            for path in categories[i].paths {
-                totalSize += await fileScanner.calculateDirectorySize(path)
+        scanTask = Task {
+            for i in categories.indices {
+                guard !Task.isCancelled else { return }
+                var totalSize: UInt64 = 0
+                for path in categories[i].paths {
+                    totalSize += await fileScanner.calculateDirectorySize(path)
+                }
+                categories[i].size = totalSize
             }
-            categories[i].size = totalSize
-        }
 
+            guard !Task.isCancelled else { return }
+
+            isScanning = false
+            statusMessage = "Scan complete. Found \(ByteFormatter.format(totalSize)) in caches."
+        }
+        await scanTask?.value
+    }
+
+    func cancelScan() {
+        scanTask?.cancel()
+        scanTask = nil
         isScanning = false
-        statusMessage = "Scan complete. Found \(ByteFormatter.format(totalSize)) in caches."
+        statusMessage = "Scan cancelled"
     }
 
     /// Loads the top subdirectories (up to 5) for a given category, sorted by size descending.
@@ -134,6 +148,14 @@ final class CacheCleanerViewModel {
 
         categoryDetails[category.name] = topSubdirectories
         fileCount[category.name] = totalFileCount
+    }
+
+    func selectAll() {
+        for i in categories.indices { categories[i].isSelected = true }
+    }
+
+    func deselectAll() {
+        for i in categories.indices { categories[i].isSelected = false }
     }
 
     func cleanSelected() async {

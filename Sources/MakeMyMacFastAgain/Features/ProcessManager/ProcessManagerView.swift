@@ -8,7 +8,39 @@ struct ProcessManagerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            headerBar
+            FeatureHeader(title: "Process Manager", subtitle: "View and manage running processes") {
+                Picker("Filter:", selection: $viewModel.selectedFilter) {
+                    ForEach(ProcessManagerViewModel.ProcessFilter.allCases, id: \.self) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 280)
+
+                TextField("Search...", text: $viewModel.searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 200)
+
+                Picker("Sort by:", selection: $viewModel.sortOrder) {
+                    ForEach(ProcessManagerViewModel.SortOrder.allCases, id: \.self) { order in
+                        Text(order.rawValue).tag(order)
+                    }
+                }
+                .frame(width: 150)
+
+                Button("Kill Selected") {
+                    if let pid = viewModel.selectedProcessID,
+                       let process = viewModel.processes.first(where: { $0.pid == pid }) {
+                        processToKill = process
+                        showKillConfirmation = true
+                    }
+                }
+                .disabled(viewModel.selectedProcessID == nil)
+
+                Button("Refresh") {
+                    viewModel.refresh()
+                }
+            }
 
             Table(viewModel.filteredProcesses, selection: $viewModel.selectedProcessID) {
                 TableColumn("PID") { process in
@@ -72,7 +104,9 @@ struct ProcessManagerView: View {
                 // Double-click: no-op
             }
 
-            statusBar
+            StatusBar(message: viewModel.statusMessage, isLoading: false) {
+                EmptyView()
+            }
         }
         .onAppear { viewModel.startMonitoring() }
         .onDisappear { viewModel.stopMonitoring() }
@@ -95,62 +129,4 @@ struct ProcessManagerView: View {
         }
     }
 
-    private var headerBar: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("Process Manager")
-                    .font(.title2.bold())
-                Text("View and manage running processes")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Picker("Filter:", selection: $viewModel.selectedFilter) {
-                ForEach(ProcessManagerViewModel.ProcessFilter.allCases, id: \.self) { filter in
-                    Text(filter.rawValue).tag(filter)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 280)
-
-            TextField("Search...", text: $viewModel.searchText)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 200)
-
-            Picker("Sort by:", selection: $viewModel.sortOrder) {
-                ForEach(ProcessManagerViewModel.SortOrder.allCases, id: \.self) { order in
-                    Text(order.rawValue).tag(order)
-                }
-            }
-            .frame(width: 150)
-
-            Button("Kill Selected") {
-                if let pid = viewModel.selectedProcessID,
-                   let process = viewModel.processes.first(where: { $0.pid == pid }) {
-                    processToKill = process
-                    showKillConfirmation = true
-                }
-            }
-            .disabled(viewModel.selectedProcessID == nil)
-
-            Button("Refresh") {
-                viewModel.refresh()
-            }
-        }
-        .padding()
-    }
-
-    private var statusBar: some View {
-        HStack {
-            Text(viewModel.statusMessage)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(.bar)
-    }
 }

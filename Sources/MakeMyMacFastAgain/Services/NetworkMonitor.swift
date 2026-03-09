@@ -24,7 +24,7 @@ final class NetworkMonitor {
             let name = String(cString: current.pointee.ifa_name)
 
             // Only count physical interfaces (en0, en1, etc.)
-            if name.hasPrefix("en") || name.hasPrefix("utun") || name.hasPrefix("pdp_ip") {
+            if name.hasPrefix("en") {
                 if let addr = current.pointee.ifa_addr, addr.pointee.sa_family == UInt8(AF_LINK) {
                     if let data = current.pointee.ifa_data {
                         let networkData = data.assumingMemoryBound(to: if_data.self)

@@ -6,7 +6,33 @@ struct BrowserCleanupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            headerBar
+            FeatureHeader(title: "Browser Cleanup", subtitle: "Clear browser caches and cookies") {
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("Cache", isOn: $viewModel.cleanCache)
+                    Text("Temporary files stored for faster page loads")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("Cookies", isOn: $viewModel.cleanCookies)
+                    Text("Login sessions and site preferences")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                if viewModel.isScanning {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                Button("Clean All") {
+                    showConfirmation = true
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .disabled(viewModel.totalCacheSize == 0 || viewModel.isCleaning)
+            }
 
             if viewModel.browsers.isEmpty {
                 ContentUnavailableView(
@@ -26,9 +52,15 @@ struct BrowserCleanupView: View {
                         )
                     }
                 }
+                .listStyle(.inset(alternatesRowBackgrounds: true))
             }
 
-            statusBar
+            StatusBar(message: viewModel.statusMessage, isLoading: viewModel.isCleaning) {
+                if viewModel.totalCacheSize > 0 {
+                    Text("Total: \(ByteFormatter.format(viewModel.totalCacheSize))")
+                        .font(.caption.bold())
+                }
+            }
         }
         .task {
             viewModel.loadBrowsers()
@@ -68,47 +100,6 @@ struct BrowserCleanupView: View {
         }
     }
 
-    private var headerBar: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("Browser Cleanup")
-                    .font(.title2.bold())
-                Text("Clear browser caches and cookies")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            VStack(alignment: .leading, spacing: 2) {
-                Toggle("Cache", isOn: $viewModel.cleanCache)
-                Text("Temporary files stored for faster page loads")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Toggle("Cookies", isOn: $viewModel.cleanCookies)
-                Text("Login sessions and site preferences")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-
-            if viewModel.isScanning {
-                ProgressView()
-                    .controlSize(.small)
-            }
-
-            Button("Clean All") {
-                showConfirmation = true
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
-            .disabled(viewModel.totalCacheSize == 0 || viewModel.isCleaning)
-        }
-        .padding()
-    }
-
     private func browserRow(_ browser: BrowserProfile) -> some View {
         HStack {
             Image(systemName: browserIcon(browser.browser))
@@ -135,21 +126,4 @@ struct BrowserCleanupView: View {
         .padding(.vertical, 4)
     }
 
-    private var statusBar: some View {
-        HStack {
-            if viewModel.isCleaning {
-                ProgressView()
-                    .controlSize(.small)
-            }
-            Text(viewModel.statusMessage)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text("Total: \(ByteFormatter.format(viewModel.totalCacheSize))")
-                .font(.caption.bold())
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(.bar)
-    }
 }

@@ -20,6 +20,7 @@ final class LargeFileFinderViewModel {
     var selectedFileIDs: Set<UUID> = []
 
     private let fileScanner = FileScanner()
+    private var scanTask: Task<Void, Never>?
 
     enum MinFileSize: String, CaseIterable {
         case mb50 = "50 MB"
@@ -88,20 +89,33 @@ final class LargeFileFinderViewModel {
         filesScanned = 0
         statusMessage = "Scanning..."
 
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        scanTask = Task {
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
 
-        files = await fileScanner.scanForLargeFiles(
-            in: home,
-            minSize: selectedMinSize.bytes
-        ) { [weak self] progress in
-            Task { @MainActor in
-                self?.filesScanned = progress.filesScanned
-                self?.currentPath = progress.currentPath
+            let result = await fileScanner.scanForLargeFiles(
+                in: home,
+                minSize: selectedMinSize.bytes
+            ) { [weak self] progress in
+                Task { @MainActor in
+                    self?.filesScanned = progress.filesScanned
+                    self?.currentPath = progress.currentPath
+                }
             }
-        }
 
+            guard !Task.isCancelled else { return }
+
+            files = result
+            isScanning = false
+            statusMessage = "Found \(files.count) files larger than \(selectedMinSize.rawValue)."
+        }
+        await scanTask?.value
+    }
+
+    func cancelScan() {
+        scanTask?.cancel()
+        scanTask = nil
         isScanning = false
-        statusMessage = "Found \(files.count) files larger than \(selectedMinSize.rawValue)."
+        statusMessage = "Scan cancelled"
     }
 
     func moveToTrash() async {
