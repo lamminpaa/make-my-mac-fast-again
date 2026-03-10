@@ -46,6 +46,8 @@ struct DashboardView: View {
                 networkDetailCard
 
                 memoryBreakdownCard
+
+                topProcessesCard
             }
             .padding()
         }
@@ -107,6 +109,34 @@ struct DashboardView: View {
                 memoryRow("Compressed", viewModel.memoryStats.compressed, .purple)
                 memoryRow("Inactive", viewModel.memoryStats.inactive, .gray)
                 memoryRow("Free", viewModel.memoryStats.free, .green)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var topProcessesCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Top Processes by Memory")
+                .font(.headline)
+
+            ForEach(viewModel.topProcesses) { process in
+                HStack {
+                    Text(process.name)
+                        .font(.callout)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(ByteFormatter.format(process.memoryBytes))
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if viewModel.topProcesses.isEmpty {
+                Text("Loading...")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
         }
         .padding()

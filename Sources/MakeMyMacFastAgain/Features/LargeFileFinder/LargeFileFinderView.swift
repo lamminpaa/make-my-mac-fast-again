@@ -1,8 +1,10 @@
 import SwiftUI
+import QuickLook
 
 struct LargeFileFinderView: View {
     @State private var viewModel = LargeFileFinderViewModel()
     @State private var showConfirmation = false
+    @State private var previewURL: URL?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,11 +38,10 @@ struct LargeFileFinderView: View {
                     }
                 }
 
-                Button("Move to Trash") {
+                Button("Move to Trash", role: .destructive) {
                     showConfirmation = true
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
                 .disabled(viewModel.selectedFileIDs.isEmpty)
             }
 
@@ -94,6 +95,18 @@ struct LargeFileFinderView: View {
                         .width(100)
 
                         TableColumn("") { file in
+                            Button {
+                                previewURL = URL(fileURLWithPath: file.path)
+                            } label: {
+                                Image(systemName: "eye")
+                            }
+                            .buttonStyle(.borderless)
+                            .controlSize(.small)
+                            .help("Quick Look preview")
+                        }
+                        .width(30)
+
+                        TableColumn("") { file in
                             Button("Reveal") {
                                 viewModel.revealInFinder(file)
                             }
@@ -115,7 +128,8 @@ struct LargeFileFinderView: View {
                 }
             }
         }
-        .alert("Confirm Move to Trash", isPresented: $showConfirmation) {
+        .quickLookPreview($previewURL)
+        .alert("Move \(viewModel.selectedFileIDs.count) Files to Trash?", isPresented: $showConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Move to Trash", role: .destructive) {
                 Task { await viewModel.moveToTrash() }

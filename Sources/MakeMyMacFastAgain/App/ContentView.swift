@@ -4,11 +4,15 @@ struct ContentView: View {
     @State private var selectedItem: NavigationItem? = .dashboard
 
     var body: some View {
-        NavigationSplitView {
-            sidebar
-                .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
-        } detail: {
-            detailView
+        VStack(spacing: 0) {
+            FullDiskAccessBanner()
+
+            NavigationSplitView {
+                sidebar
+                    .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
+            } detail: {
+                detailView
+            }
         }
         .onAppear {
             ScreenshotController.shared.onSelectItem = { item in

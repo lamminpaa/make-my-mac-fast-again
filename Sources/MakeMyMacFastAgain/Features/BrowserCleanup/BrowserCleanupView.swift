@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct BrowserCleanupView: View {
@@ -26,11 +27,10 @@ struct BrowserCleanupView: View {
                         .controlSize(.small)
                 }
 
-                Button("Clean All") {
+                Button("Clean All", role: .destructive) {
                     showConfirmation = true
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
                 .disabled(viewModel.totalCacheSize == 0 || viewModel.isCleaning)
             }
 
@@ -40,19 +40,26 @@ struct BrowserCleanupView: View {
                     systemImage: "globe"
                 )
             } else {
-                List {
-                    ForEach(viewModel.browsers.filter(\.isInstalled)) { browser in
-                        browserRow(browser)
-                    }
-
-                    if viewModel.browsers.allSatisfy({ !$0.isInstalled }) {
-                        ContentUnavailableView(
-                            "No supported browsers detected",
-                            systemImage: "globe"
-                        )
+                ScrollView {
+                    VStack(spacing: 0) {
+                        let installedBrowsers = viewModel.browsers.filter(\.isInstalled)
+                        if installedBrowsers.isEmpty {
+                            ContentUnavailableView(
+                                "No supported browsers detected",
+                                systemImage: "globe"
+                            )
+                        } else {
+                            ForEach(installedBrowsers) { browser in
+                                browserRow(browser)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                if browser.id != installedBrowsers.last?.id {
+                                    Divider()
+                                }
+                            }
+                        }
                     }
                 }
-                .listStyle(.inset(alternatesRowBackgrounds: true))
             }
 
             StatusBar(message: viewModel.statusMessage, isLoading: viewModel.isCleaning) {
@@ -66,7 +73,7 @@ struct BrowserCleanupView: View {
             viewModel.loadBrowsers()
             await viewModel.scanSizes()
         }
-        .alert("Confirm Browser Cleanup", isPresented: $showConfirmation) {
+        .alert("Delete \(ByteFormatter.format(viewModel.totalCacheSize)) of Browser Data?", isPresented: $showConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Clean", role: .destructive) {
                 Task { await viewModel.cleanBrowsers() }
@@ -80,32 +87,31 @@ struct BrowserCleanupView: View {
         }
     }
 
-    /// Maps a browser name to its corresponding SF Symbol icon name.
-    private func browserIcon(_ name: String) -> String {
-        switch name {
-        case "Safari":
-            return "safari"
-        case "Google Chrome":
-            return "globe"
-        case "Firefox":
-            return "flame"
-        case "Microsoft Edge":
-            return "globe"
-        case "Arc":
-            return "globe"
-        case "Brave":
-            return "shield"
-        default:
-            return "globe"
-        }
+    private func browserAppIcon(_ name: String) -> NSImage? {
+        let appPaths: [String: String] = [
+            "Safari": "/Applications/Safari.app",
+            "Google Chrome": "/Applications/Google Chrome.app",
+            "Firefox": "/Applications/Firefox.app",
+            "Microsoft Edge": "/Applications/Microsoft Edge.app",
+            "Arc": "/Applications/Arc.app",
+            "Brave": "/Applications/Brave Browser.app",
+        ]
+        guard let path = appPaths[name] else { return nil }
+        return NSWorkspace.shared.icon(forFile: path)
     }
 
     private func browserRow(_ browser: BrowserProfile) -> some View {
         HStack {
-            Image(systemName: browserIcon(browser.browser))
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
+            if let icon = browserAppIcon(browser.browser) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 24, height: 24)
+            } else {
+                Image(systemName: "globe")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24)
+            }
 
             Text(browser.browser)
                 .font(.body.bold())

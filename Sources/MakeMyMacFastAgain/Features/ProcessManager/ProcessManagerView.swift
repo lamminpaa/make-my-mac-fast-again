@@ -117,7 +117,7 @@ struct ProcessManagerView: View {
         }
         .onAppear { viewModel.startMonitoring() }
         .onDisappear { viewModel.stopMonitoring() }
-        .alert("Kill Process", isPresented: $showKillConfirmation) {
+        .alert("Kill \(processToKill?.name ?? "Process")?", isPresented: $showKillConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Kill (SIGTERM)") {
                 if let process = processToKill {

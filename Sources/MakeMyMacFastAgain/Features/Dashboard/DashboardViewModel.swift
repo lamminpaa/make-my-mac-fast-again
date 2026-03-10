@@ -20,7 +20,10 @@ final class DashboardViewModel {
     private let memoryMonitor = MemoryMonitor()
     private let diskMonitor = DiskMonitor()
     private let networkMonitor = NetworkMonitor()
+    private let processService = ProcessService()
     private var timer: Timer?
+
+    var topProcesses: [AppProcessInfo] = []
 
     func startMonitoring() {
         loadSystemInfo()
@@ -54,6 +57,9 @@ final class DashboardViewModel {
         if memoryHistory.count > Self.maxHistorySamples {
             memoryHistory.removeFirst(memoryHistory.count - Self.maxHistorySamples)
         }
+
+        let allProcesses = processService.listProcesses()
+        topProcesses = Array(allProcesses.sorted { $0.memoryBytes > $1.memoryBytes }.prefix(5))
     }
 
     private func loadSystemInfo() {

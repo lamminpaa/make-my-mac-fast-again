@@ -28,11 +28,10 @@ struct CacheCleanerView: View {
                     Button("Deselect All") { viewModel.deselectAll() }
                 }
 
-                Button("Clean Selected") {
+                Button("Clean Selected", role: .destructive) {
                     showConfirmation = true
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
                 .disabled(viewModel.totalSelectedSize == 0 || viewModel.isCleaning)
             }
 
@@ -59,7 +58,7 @@ struct CacheCleanerView: View {
             viewModel.loadCategories()
             await viewModel.scanSizes()
         }
-        .alert("Confirm Cleanup", isPresented: $showConfirmation) {
+        .alert("Delete \(ByteFormatter.format(viewModel.totalSelectedSize)) of Cache Data?", isPresented: $showConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Clean", role: .destructive) {
                 Task { await viewModel.cleanSelected() }
@@ -111,9 +110,20 @@ struct CacheCleanerView: View {
                         .help("Requires administrator privileges")
                 }
 
-                Text(ByteFormatter.format(category.size))
-                    .font(.body.monospacedDigit())
-                    .foregroundStyle(category.size > 0 ? .primary : .secondary)
+                if viewModel.isScanning && category.size == 0 {
+                    if viewModel.currentScanIndex == index {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else if (viewModel.currentScanIndex ?? 0) < index {
+                        Text("Pending...")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                } else {
+                    Text(ByteFormatter.format(category.size))
+                        .font(.body.monospacedDigit())
+                        .foregroundStyle(category.size > 0 ? .primary : .secondary)
+                }
             }
             .padding(.vertical, 4)
 
