@@ -5,7 +5,7 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Monitoring") {
+            Section {
                 HStack {
                     Text("Dashboard refresh interval")
                     Spacer()
@@ -29,6 +29,11 @@ struct SettingsView: View {
                     }
                     .frame(width: 150)
                 }
+            } header: {
+                Text("Monitoring")
+            } footer: {
+                Text("Interval changes take effect when you switch tabs.")
+                    .foregroundStyle(.secondary)
             }
 
             Section("Safety") {

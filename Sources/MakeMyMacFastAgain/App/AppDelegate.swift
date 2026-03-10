@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         true
     }
 
-    private func setupMenu() {
+    @MainActor private func setupMenu() {
         let mainMenu = NSMenu()
 
         // App menu
@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = mainMenu
     }
 
-    @objc private func openSettings() {
+    @MainActor @objc private func openSettings() {
         if let settingsWindow = settingsWindow {
             settingsWindow.makeKeyAndOrderFront(nil)
             return
