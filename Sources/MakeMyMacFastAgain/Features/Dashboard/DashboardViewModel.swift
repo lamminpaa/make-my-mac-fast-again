@@ -29,7 +29,8 @@ final class DashboardViewModel {
         loadSystemInfo()
         refresh()
 
-        timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        let interval = AppSettings.load().dashboardRefreshInterval
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.refresh()
             }

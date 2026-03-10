@@ -15,7 +15,7 @@ final class ProcessManagerViewModel {
     private let processService = ProcessService()
     private var timer: Timer?
     private var previousCPUTimes: [pid_t: Double] = [:]
-    private let refreshInterval: Double = 3.0
+    private var refreshInterval: Double = 3.0
     private let currentUsername = NSUserName()
 
     enum SortOrder: String, CaseIterable, Sendable {
@@ -72,6 +72,7 @@ final class ProcessManagerViewModel {
     }
 
     func startMonitoring() {
+        refreshInterval = AppSettings.load().processRefreshInterval
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
