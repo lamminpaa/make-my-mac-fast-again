@@ -8,6 +8,7 @@ final class CacheCleanerViewModel {
     var isScanning = false
     var isCleaning = false
     var statusMessage = ""
+    var currentScanIndex: Int?
 
     /// Subdirectory details per category name: maps category name to its top subdirectories with sizes.
     var categoryDetails: [String: [(name: String, size: UInt64)]] = [:]
@@ -98,6 +99,7 @@ final class CacheCleanerViewModel {
         scanTask = Task {
             for i in categories.indices {
                 guard !Task.isCancelled else { return }
+                currentScanIndex = i
                 var totalSize: UInt64 = 0
                 for path in categories[i].paths {
                     totalSize += await fileScanner.calculateDirectorySize(path)
@@ -107,6 +109,7 @@ final class CacheCleanerViewModel {
 
             guard !Task.isCancelled else { return }
 
+            currentScanIndex = nil
             isScanning = false
             statusMessage = "Scan complete. Found \(ByteFormatter.format(totalSize)) in caches."
         }
