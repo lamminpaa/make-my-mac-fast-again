@@ -9,25 +9,6 @@ struct ProcessManagerView: View {
     var body: some View {
         VStack(spacing: 0) {
             FeatureHeader(title: "Process Manager", subtitle: "View and manage running processes") {
-                Picker("Filter:", selection: $viewModel.selectedFilter) {
-                    ForEach(ProcessManagerViewModel.ProcessFilter.allCases, id: \.self) { filter in
-                        Text(filter.rawValue).tag(filter)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 280)
-
-                TextField("Search...", text: $viewModel.searchText)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 200)
-
-                Picker("Sort by:", selection: $viewModel.sortOrder) {
-                    ForEach(ProcessManagerViewModel.SortOrder.allCases, id: \.self) { order in
-                        Text(order.rawValue).tag(order)
-                    }
-                }
-                .frame(width: 150)
-
                 Button("Kill Selected") {
                     if let pid = viewModel.selectedProcessID,
                        let process = viewModel.processes.first(where: { $0.pid == pid }) {
@@ -41,6 +22,32 @@ struct ProcessManagerView: View {
                     viewModel.refresh()
                 }
             }
+
+            HStack(spacing: 12) {
+                Picker("Filter", selection: $viewModel.selectedFilter) {
+                    ForEach(ProcessManagerViewModel.ProcessFilter.allCases, id: \.self) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 280)
+
+                TextField("Search...", text: $viewModel.searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 200)
+
+                Spacer()
+
+                Picker("Sort by:", selection: $viewModel.sortOrder) {
+                    ForEach(ProcessManagerViewModel.SortOrder.allCases, id: \.self) { order in
+                        Text(order.rawValue).tag(order)
+                    }
+                }
+                .frame(width: 150)
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 8)
 
             Table(viewModel.filteredProcesses, selection: $viewModel.selectedProcessID) {
                 TableColumn("PID") { process in
