@@ -26,4 +26,5 @@ bundle: release
 	mkdir -p $(BUNDLE_DIR)/Contents/Resources
 	cp $(BUILD_DIR)/release/$(APP_NAME) $(BUNDLE_DIR)/Contents/MacOS/
 	cp Resources/Info.plist $(BUNDLE_DIR)/Contents/
+	cp Resources/AppIcon.icns $(BUNDLE_DIR)/Contents/Resources/
 	@echo "Bundle created at $(BUNDLE_DIR)"
