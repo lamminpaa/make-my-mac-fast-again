@@ -15,6 +15,7 @@ final class ProcessManagerViewModel {
     private weak var appState: AppState?
     private var timer: Timer?
     private var previousCPUTimes: [pid_t: Double] = [:]
+    private var lastRefreshTimestamp: Date?
     private var refreshInterval: Double = 3.0
     private let currentUsername = NSUserName()
     private let ownPID = getpid()
@@ -84,6 +85,7 @@ final class ProcessManagerViewModel {
 
     func startMonitoring() {
         refreshInterval = AppSettings.load().processRefreshInterval
+        lastRefreshTimestamp = Date()
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -99,6 +101,10 @@ final class ProcessManagerViewModel {
 
     func refresh() {
         guard let processService = appState?.processService else { return }
+        let now = Date()
+        let elapsed = lastRefreshTimestamp.map { now.timeIntervalSince($0) } ?? refreshInterval
+        lastRefreshTimestamp = now
+
         var currentProcesses = processService.listProcesses()
         var newCPUTimes: [pid_t: Double] = [:]
 
@@ -107,9 +113,9 @@ final class ProcessManagerViewModel {
             let currentTime = currentProcesses[i].cpuUsage
             newCPUTimes[pid] = currentTime
 
-            if let previousTime = previousCPUTimes[pid] {
+            if let previousTime = previousCPUTimes[pid], elapsed > 0 {
                 let delta = currentTime - previousTime
-                let percentage = delta / (refreshInterval * 1_000_000_000) * 100
+                let percentage = delta / (elapsed * 1_000_000_000) * 100
                 currentProcesses[i].cpuPercentage = max(0, percentage)
             }
 

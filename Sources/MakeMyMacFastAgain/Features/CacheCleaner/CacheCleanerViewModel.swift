@@ -1,14 +1,15 @@
 import Foundation
 import SwiftUI
+import os
 
 @MainActor
 @Observable
 final class CacheCleanerViewModel {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "cache-cleaner")
     var categories: [CacheCategory] = []
     var isScanning = false
     var isCleaning = false
     var statusMessage = ""
-    var currentScanIndex: Int?
 
     /// Subdirectory details per category name: maps category name to its top subdirectories with sizes.
     var categoryDetails: [String: [(name: String, size: UInt64)]] = [:]
@@ -106,19 +107,34 @@ final class CacheCleanerViewModel {
         statusMessage = "Scanning cache sizes..."
 
         scanTask = Task {
-            for i in categories.indices {
-                guard !Task.isCancelled else { return }
-                currentScanIndex = i
-                var totalSize: UInt64 = 0
-                for path in categories[i].paths {
-                    totalSize += await fileScanner.calculateDirectorySize(path)
+            // Scan all categories in parallel using TaskGroup
+            let indexedCategories = Array(categories.enumerated())
+            let results = await withTaskGroup(
+                of: (index: Int, size: UInt64).self,
+                returning: [(index: Int, size: UInt64)].self
+            ) { group in
+                for (i, category) in indexedCategories {
+                    group.addTask { [fileScanner] in
+                        var size: UInt64 = 0
+                        for path in category.paths {
+                            size += await fileScanner.calculateDirectorySize(path)
+                        }
+                        return (index: i, size: size)
+                    }
                 }
-                categories[i].size = totalSize
+                var collected: [(index: Int, size: UInt64)] = []
+                for await result in group {
+                    collected.append(result)
+                }
+                return collected
             }
 
             guard !Task.isCancelled else { return }
 
-            currentScanIndex = nil
+            for result in results {
+                categories[result.index].size = result.size
+            }
+
             isScanning = false
             statusMessage = "Scan complete. Found \(ByteFormatter.format(totalSize)) in caches."
             appState?.totalCacheBytes = totalSize
@@ -191,6 +207,7 @@ final class CacheCleanerViewModel {
                     do {
                         _ = try await privilegedExecutor.run(.removeCache(path: path))
                     } catch {
+                        logger.warning("Failed to clean \(category.name) at \(path): \(error.localizedDescription)")
                         statusMessage = "Failed to clean \(category.name): \(error.localizedDescription)"
                     }
                 } else {
@@ -201,6 +218,7 @@ final class CacheCleanerViewModel {
                             try fileManager.removeItem(atPath: itemPath)
                         } catch {
                             failedCount += 1
+                            logger.warning("Failed to remove \(itemPath): \(error.localizedDescription)")
                         }
                     }
                 }

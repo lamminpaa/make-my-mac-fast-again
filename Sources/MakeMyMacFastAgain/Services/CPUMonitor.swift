@@ -30,6 +30,9 @@ final class CPUMonitor {
             return stats
         }
 
+        let size = Int(numCPUInfo) * MemoryLayout<integer_t>.stride
+        defer { vm_deallocate(mach_task_self_, vm_address_t(bitPattern: info), vm_size_t(size)) }
+
         var totalUser: UInt64 = 0
         var totalSystem: UInt64 = 0
         var totalIdle: UInt64 = 0
@@ -49,10 +52,6 @@ final class CPUMonitor {
             if totalUser < prev.user || totalSystem < prev.system ||
                totalIdle < prev.idle || totalNice < prev.nice {
                 previousTicks = (user: totalUser, system: totalSystem, idle: totalIdle, nice: totalNice)
-
-                let size = Int(numCPUInfo) * MemoryLayout<integer_t>.stride
-                vm_deallocate(mach_task_self_, vm_address_t(bitPattern: info), vm_size_t(size))
-
                 return stats
             }
 
@@ -70,9 +69,6 @@ final class CPUMonitor {
         }
 
         previousTicks = (user: totalUser, system: totalSystem, idle: totalIdle, nice: totalNice)
-
-        let size = Int(numCPUInfo) * MemoryLayout<integer_t>.stride
-        vm_deallocate(mach_task_self_, vm_address_t(bitPattern: info), vm_size_t(size))
 
         logger.debug("CPU read: user=\(stats.userPercentage, format: .fixed(precision: 1))% system=\(stats.systemPercentage, format: .fixed(precision: 1))% idle=\(stats.idlePercentage, format: .fixed(precision: 1))%")
         return stats

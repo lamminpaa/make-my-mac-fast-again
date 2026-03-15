@@ -84,6 +84,14 @@ enum StartupItemType: String, Sendable {
     case globalDaemon = "Global Daemon"
 }
 
+struct HealthScoreBreakdown: Sendable {
+    let diskScore: Double
+    let memoryScore: Double
+    let startupScore: Double
+    let cacheScore: Double
+    let zombieScore: Double
+}
+
 struct LargeFile: Identifiable, Hashable, Sendable {
     let id = UUID()
     let path: String

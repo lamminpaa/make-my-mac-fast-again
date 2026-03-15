@@ -97,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defer: false
         )
         settingsWindow.title = "Settings"
-        settingsWindow.contentView = NSHostingView(rootView: SettingsView())
+        settingsWindow.contentView = NSHostingView(rootView: SettingsView().environment(\.appState, appState))
         settingsWindow.center()
         settingsWindow.makeKeyAndOrderFront(nil)
         settingsWindow.isReleasedWhenClosed = false

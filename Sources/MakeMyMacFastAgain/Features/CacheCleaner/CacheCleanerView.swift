@@ -122,14 +122,8 @@ struct CacheCleanerView: View {
                 }
 
                 if viewModel.isScanning && category.size == 0 {
-                    if viewModel.currentScanIndex == index {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else if (viewModel.currentScanIndex ?? 0) < index {
-                        Text("Pending...")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
+                    ProgressView()
+                        .controlSize(.small)
                 } else {
                     Text(ByteFormatter.format(category.size))
                         .font(.body.monospacedDigit())
