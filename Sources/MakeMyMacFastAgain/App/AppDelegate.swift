@@ -1,12 +1,15 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
     private var settingsWindow: NSWindow?
+    let appState = AppState()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let contentView = ContentView()
+            .environment(\.appState, appState)
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
@@ -25,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
 
+        appState.startMonitoring()
         setupMenu()
     }
 
@@ -32,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         true
     }
 
-    @MainActor private func setupMenu() {
+    private func setupMenu() {
         let mainMenu = NSMenu()
 
         // App menu
@@ -67,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = mainMenu
     }
 
-    @MainActor @objc private func openSettings() {
+    @objc private func openSettings() {
         if let settingsWindow = settingsWindow {
             settingsWindow.makeKeyAndOrderFront(nil)
             return

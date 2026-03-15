@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct ProcessManagerView: View {
+    @Environment(\.appState) private var appState
     @State private var viewModel = ProcessManagerViewModel()
     @State private var processToKill: AppProcessInfo?
     @State private var showKillConfirmation = false
@@ -123,7 +124,12 @@ struct ProcessManagerView: View {
                 EmptyView()
             }
         }
-        .onAppear { viewModel.startMonitoring() }
+        .onAppear {
+            if let appState {
+                viewModel.bind(to: appState)
+            }
+            viewModel.startMonitoring()
+        }
         .onDisappear { viewModel.stopMonitoring() }
         .alert("Kill \(processToKill?.name ?? "Process")?", isPresented: $showKillConfirmation) {
             Button("Cancel", role: .cancel) {}

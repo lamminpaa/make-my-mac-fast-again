@@ -10,7 +10,6 @@ struct PurgeHistoryEntry: Identifiable, Sendable {
 @MainActor
 @Observable
 final class MemoryOptimizerViewModel {
-    var memoryStats = MemoryStats()
     var isPurging = false
     var statusMessage = ""
     var memoryBefore: UInt64 = 0
@@ -18,6 +17,11 @@ final class MemoryOptimizerViewModel {
     var showResult = false
     var lastPurgeFreed: UInt64?
     var purgeHistory: [PurgeHistoryEntry] = []
+
+    /// Read memoryStats from AppState; fall back to empty stats if not bound yet.
+    var memoryStats: MemoryStats {
+        appState?.memoryStats ?? MemoryStats()
+    }
 
     var memoryPressureLevel: MemoryPressureLevel {
         let pct = memoryStats.usagePercentage
@@ -50,26 +54,11 @@ final class MemoryOptimizerViewModel {
 
     private static let maxPurgeHistory = 10
 
-    private let memoryMonitor = MemoryMonitor()
+    private weak var appState: AppState?
     private let privilegedExecutor = PrivilegedExecutor()
-    private var timer: Timer?
 
-    func startMonitoring() {
-        refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.refresh()
-            }
-        }
-    }
-
-    func stopMonitoring() {
-        timer?.invalidate()
-        timer = nil
-    }
-
-    private func refresh() {
-        memoryStats = memoryMonitor.read()
+    func bind(to appState: AppState) {
+        self.appState = appState
     }
 
     func purgeMemory() async {
@@ -82,9 +71,8 @@ final class MemoryOptimizerViewModel {
         do {
             _ = try await privilegedExecutor.run(.purgeMemory)
 
-            // Wait for memory stats to settle
+            // Wait for memory stats to settle (AppState timer refreshes automatically)
             try? await Task.sleep(for: .seconds(2))
-            refresh()
 
             memoryAfter = memoryStats.used
             showResult = true

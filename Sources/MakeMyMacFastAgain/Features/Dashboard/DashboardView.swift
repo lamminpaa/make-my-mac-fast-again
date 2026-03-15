@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DashboardView: View {
+    @Environment(\.appState) private var appState
     @State private var viewModel = DashboardViewModel()
 
     var body: some View {
@@ -23,8 +24,11 @@ struct DashboardView: View {
             }
         }
         .animation(.easeIn(duration: 0.3), value: viewModel.hasInitialData)
-        .onAppear { viewModel.startMonitoring() }
-        .onDisappear { viewModel.stopMonitoring() }
+        .onAppear {
+            if let appState {
+                viewModel.bind(to: appState)
+            }
+        }
     }
 
     private var dashboardContent: some View {

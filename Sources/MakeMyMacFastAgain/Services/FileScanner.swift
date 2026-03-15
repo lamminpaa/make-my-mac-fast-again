@@ -7,6 +7,23 @@ actor FileScanner {
         var currentPath: String
     }
 
+    private struct CacheEntry {
+        let size: UInt64
+        let timestamp: Date
+    }
+
+    private static let cacheTTL: TimeInterval = 30
+
+    private var sizeCache: [String: CacheEntry] = [:]
+
+    func invalidateCache() {
+        sizeCache.removeAll()
+    }
+
+    func invalidateCache(for path: String) {
+        sizeCache.removeValue(forKey: path)
+    }
+
     func scanForLargeFiles(
         in directory: String,
         minSize: UInt64,
@@ -64,7 +81,14 @@ actor FileScanner {
     }
 
     func calculateDirectorySize(_ path: String) async -> UInt64 {
-        _calculateDirectorySize(path)
+        if let cached = sizeCache[path],
+           Date().timeIntervalSince(cached.timestamp) < Self.cacheTTL {
+            return cached.size
+        }
+
+        let size = _calculateDirectorySize(path)
+        sizeCache[path] = CacheEntry(size: size, timestamp: Date())
+        return size
     }
 
     private nonisolated func _calculateDirectorySize(_ path: String) -> UInt64 {
@@ -80,8 +104,13 @@ actor FileScanner {
         }
 
         var totalSize: UInt64 = 0
+        var fileCount = 0
 
         for case let fileURL as URL in enumerator {
+            fileCount += 1
+            if fileCount % 100 == 0 && Task.isCancelled {
+                break
+            }
             if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
                 totalSize += UInt64(size)
             }

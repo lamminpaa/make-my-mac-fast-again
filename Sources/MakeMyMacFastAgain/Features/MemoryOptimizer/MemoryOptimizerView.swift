@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MemoryOptimizerView: View {
+    @Environment(\.appState) private var appState
     @State private var viewModel = MemoryOptimizerViewModel()
 
     var body: some View {
@@ -26,8 +27,11 @@ struct MemoryOptimizerView: View {
             }
             .padding()
         }
-        .onAppear { viewModel.startMonitoring() }
-        .onDisappear { viewModel.stopMonitoring() }
+        .onAppear {
+            if let appState {
+                viewModel.bind(to: appState)
+            }
+        }
     }
 
     private var headerBar: some View {

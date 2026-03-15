@@ -12,7 +12,7 @@ final class ProcessManagerViewModel {
     var statusMessage = ""
     var selectedProcessID: pid_t?
 
-    private let processService = ProcessService()
+    private weak var appState: AppState?
     private var timer: Timer?
     private var previousCPUTimes: [pid_t: Double] = [:]
     private var refreshInterval: Double = 3.0
@@ -78,6 +78,10 @@ final class ProcessManagerViewModel {
         }
     }
 
+    func bind(to appState: AppState) {
+        self.appState = appState
+    }
+
     func startMonitoring() {
         refreshInterval = AppSettings.load().processRefreshInterval
         refresh()
@@ -94,6 +98,7 @@ final class ProcessManagerViewModel {
     }
 
     func refresh() {
+        guard let processService = appState?.processService else { return }
         var currentProcesses = processService.listProcesses()
         var newCPUTimes: [pid_t: Double] = [:]
 
@@ -183,6 +188,9 @@ final class ProcessManagerViewModel {
     /// Re-reads the process to guard against PID reuse race conditions.
     /// Returns a reason string if the process identity no longer matches, nil if safe to proceed.
     private func verifyProcessIdentity(_ process: AppProcessInfo) -> String? {
+        guard let processService = appState?.processService else {
+            return "Process service unavailable"
+        }
         guard let current = processService.getProcessInfo(pid: process.pid) else {
             return "Process \(process.name) (PID \(process.pid)) no longer exists"
         }

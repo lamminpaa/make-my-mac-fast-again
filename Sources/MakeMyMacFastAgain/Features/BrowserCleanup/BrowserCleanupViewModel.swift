@@ -188,6 +188,8 @@ final class BrowserCleanupViewModel {
             }
         }
 
+        await fileScanner.invalidateCache()
+
         isCleaning = false
         statusMessage = "Freed \(ByteFormatter.format(freedSpace)) from browser data."
         await scanSizes()

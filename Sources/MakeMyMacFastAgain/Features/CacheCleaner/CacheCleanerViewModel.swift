@@ -200,6 +200,8 @@ final class CacheCleanerViewModel {
             }
         }
 
+        await fileScanner.invalidateCache()
+
         isCleaning = false
         if failedCount > 0 {
             statusMessage = "Freed \(ByteFormatter.format(freedSpace)). \(failedCount) items failed to clean."
