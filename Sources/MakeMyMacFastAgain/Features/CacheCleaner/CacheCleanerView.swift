@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct CacheCleanerView: View {
+    @Environment(\.appState) private var appState
     @State private var viewModel = CacheCleanerViewModel()
     @State private var showCleanPreview = false
     @State private var expandedCategories: Set<String> = []
@@ -55,6 +56,7 @@ struct CacheCleanerView: View {
             }
         }
         .task {
+            viewModel.notificationService = appState?.notificationService
             viewModel.loadCategories()
             await viewModel.scanSizes()
         }

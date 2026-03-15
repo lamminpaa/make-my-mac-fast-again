@@ -11,6 +11,9 @@ final class BrowserCleanupViewModel {
     var cleanCache = true
     var cleanCookies = false
 
+    /// Set by the view to enable cleanup-complete notifications.
+    var notificationService: NotificationService?
+
     private let fileScanner = FileScanner()
 
     var totalCacheSize: UInt64 {
@@ -196,6 +199,7 @@ final class BrowserCleanupViewModel {
         if freedSpace > 0 {
             var settings = AppSettings.load()
             settings.recordCleanup(freedBytes: freedSpace)
+            notificationService?.notifyCleanupComplete(freedBytes: freedSpace)
         }
 
         await scanSizes()

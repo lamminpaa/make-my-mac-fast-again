@@ -69,6 +69,7 @@ final class AppState {
     let diskMonitor = DiskMonitor()
     let networkMonitor = NetworkMonitor()
     let processService = ProcessService()
+    let notificationService = NotificationService()
 
     // MARK: - Private
 
@@ -122,6 +123,14 @@ final class AppState {
 
         if !hasInitialData {
             hasInitialData = true
+        }
+
+        // Notify user when system resources are critically low
+        if memoryStats.usagePercentage > 90 {
+            notificationService.notifyHighMemoryPressure()
+        }
+        if diskStats.usagePercentage > 90 {
+            notificationService.notifyDiskSpaceLow(freeSpace: diskStats.freeSpace)
         }
     }
 

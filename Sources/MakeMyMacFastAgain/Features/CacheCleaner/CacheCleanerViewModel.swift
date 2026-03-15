@@ -16,6 +16,9 @@ final class CacheCleanerViewModel {
     /// File count per category name.
     var fileCount: [String: Int] = [:]
 
+    /// Set by the view to enable cleanup-complete notifications.
+    var notificationService: NotificationService?
+
     private let fileScanner = FileScanner()
     private let shell = ShellExecutor()
     private let privilegedExecutor = PrivilegedExecutor()
@@ -212,6 +215,7 @@ final class CacheCleanerViewModel {
         if freedSpace > 0 {
             var settings = AppSettings.load()
             settings.recordCleanup(freedBytes: freedSpace)
+            notificationService?.notifyCleanupComplete(freedBytes: freedSpace)
         }
 
         // Clear cached details since contents changed
