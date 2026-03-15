@@ -1,9 +1,11 @@
 import Foundation
 import AppKit
+import os
 
 @MainActor
 @Observable
 final class BrowserCleanupViewModel {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "browser-cleanup")
     var browsers: [BrowserProfile] = []
     var isScanning = false
     var isCleaning = false
@@ -165,12 +167,30 @@ final class BrowserCleanupViewModel {
         isScanning = true
         statusMessage = "Scanning browser caches..."
 
-        for i in browsers.indices where browsers[i].isInstalled {
-            var totalSize: UInt64 = 0
-            for path in browsers[i].cachePaths {
-                totalSize += await fileScanner.calculateDirectorySize(path)
+        let installedIndices = browsers.indices.filter { browsers[$0].isInstalled }
+        let results = await withTaskGroup(
+            of: (index: Int, size: UInt64).self,
+            returning: [(index: Int, size: UInt64)].self
+        ) { group in
+            for i in installedIndices {
+                let paths = browsers[i].cachePaths
+                group.addTask { [fileScanner] in
+                    var size: UInt64 = 0
+                    for path in paths {
+                        size += await fileScanner.calculateDirectorySize(path)
+                    }
+                    return (index: i, size: size)
+                }
             }
-            browsers[i].cacheSize = totalSize
+            var collected: [(index: Int, size: UInt64)] = []
+            for await result in group {
+                collected.append(result)
+            }
+            return collected
+        }
+
+        for result in results {
+            browsers[result.index].cacheSize = result.size
         }
 
         isScanning = false
@@ -245,7 +265,7 @@ final class BrowserCleanupViewModel {
                 try fm.removeItem(atPath: path)
             }
         } catch {
-            // Continue — partial cleanup still counts
+            logger.warning("Failed to clean \(path): \(error.localizedDescription)")
         }
 
         let sizeAfter = await fileScanner.calculateDirectorySize(path)

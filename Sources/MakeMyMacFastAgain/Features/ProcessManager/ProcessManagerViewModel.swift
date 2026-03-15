@@ -84,6 +84,7 @@ final class ProcessManagerViewModel {
     }
 
     func startMonitoring() {
+        timer?.invalidate()
         refreshInterval = AppSettings.load().processRefreshInterval
         lastRefreshTimestamp = Date()
         refresh()

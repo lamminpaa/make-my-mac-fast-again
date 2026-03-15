@@ -207,8 +207,8 @@ final class CacheCleanerViewModel {
                     do {
                         _ = try await privilegedExecutor.run(.removeCache(path: path))
                     } catch {
+                        failedCount += 1
                         logger.warning("Failed to clean \(category.name) at \(path): \(error.localizedDescription)")
-                        statusMessage = "Failed to clean \(category.name): \(error.localizedDescription)"
                     }
                 } else {
                     let contents = (try? fileManager.contentsOfDirectory(atPath: path)) ?? []

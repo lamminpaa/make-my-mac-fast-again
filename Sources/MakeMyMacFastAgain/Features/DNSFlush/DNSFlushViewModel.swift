@@ -78,36 +78,49 @@ final class DNSFlushViewModel {
         }
 
         let validServerPattern = /^[a-zA-Z0-9.:]+$/
-        for server in serversToTest {
-            guard server.wholeMatch(of: validServerPattern) != nil else {
-                continue
-            }
-            do {
-                let executable = server.contains(":") ? "/sbin/ping6" : "/sbin/ping"
-                let args = server.contains(":") ? ["-c", "1", server] : ["-c", "1", "-t", "2", server]
-                let result = try await shell.run(executablePath: executable, arguments: args)
-                // Parse round-trip time from ping output
-                // Example line: "round-trip min/avg/max/stddev = 1.234/1.234/1.234/0.000 ms"
-                if let rtLine = result.output.components(separatedBy: "\n").last(where: { $0.contains("round-trip") }) {
-                    let parts = rtLine.components(separatedBy: "=")
-                    if parts.count >= 2 {
-                        let values = parts[1].trimmingCharacters(in: .whitespaces).components(separatedBy: "/")
-                        if values.count >= 2 {
-                            // Use the avg value (second field)
-                            let avgMs = values[1].trimmingCharacters(in: .whitespaces)
-                            if let ms = Double(avgMs) {
-                                serverLatencies[server] = String(format: "%.0fms", ms)
-                            } else {
-                                serverLatencies[server] = "\(avgMs)ms"
+        let validServers = serversToTest.filter { $0.wholeMatch(of: validServerPattern) != nil }
+
+        let results = await withTaskGroup(
+            of: (server: String, latency: String).self,
+            returning: [(server: String, latency: String)].self
+        ) { [shell] group in
+            for server in validServers {
+                group.addTask {
+                    let executable = server.contains(":") ? "/sbin/ping6" : "/sbin/ping"
+                    let args = server.contains(":") ? ["-c", "1", server] : ["-c", "1", "-t", "2", server]
+                    do {
+                        let result = try await shell.run(executablePath: executable, arguments: args)
+                        if let rtLine = result.output.components(separatedBy: "\n").last(where: { $0.contains("round-trip") }) {
+                            let parts = rtLine.components(separatedBy: "=")
+                            if parts.count >= 2 {
+                                let values = parts[1].trimmingCharacters(in: .whitespaces).components(separatedBy: "/")
+                                if values.count >= 2 {
+                                    let avgMs = values[1].trimmingCharacters(in: .whitespaces)
+                                    if let ms = Double(avgMs) {
+                                        return (server: server, latency: String(format: "%.0fms", ms))
+                                    }
+                                    return (server: server, latency: "\(avgMs)ms")
+                                }
                             }
                         }
+                        if result.exitCode != 0 {
+                            return (server: server, latency: "timeout")
+                        }
+                        return (server: server, latency: "timeout")
+                    } catch {
+                        return (server: server, latency: "timeout")
                     }
-                } else if result.exitCode != 0 {
-                    serverLatencies[server] = "timeout"
                 }
-            } catch {
-                serverLatencies[server] = "timeout"
             }
+            var collected: [(server: String, latency: String)] = []
+            for await result in group {
+                collected.append(result)
+            }
+            return collected
+        }
+
+        for result in results {
+            serverLatencies[result.server] = result.latency
         }
 
         isTestingServers = false

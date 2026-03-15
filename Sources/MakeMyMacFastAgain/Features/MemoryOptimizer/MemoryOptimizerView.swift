@@ -27,7 +27,7 @@ struct MemoryOptimizerView: View {
             }
             .padding()
         }
-        .onAppear {
+        .task {
             if let appState {
                 viewModel.bind(to: appState)
             }
