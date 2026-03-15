@@ -141,8 +141,10 @@ final class StartupItemsViewModel {
 
             switch item.type {
             case .userAgent:
-                let command = "launchctl \(action.rawValue) \(domain)/\(item.label)"
-                _ = try await shell.run(command)
+                _ = try await shell.run(
+                    executablePath: "/bin/launchctl",
+                    arguments: [action.rawValue, "\(domain)/\(item.label)"]
+                )
             case .globalAgent, .globalDaemon:
                 _ = try await privilegedExecutor.run(
                     .launchctl(action: action, domain: domain, label: item.label)

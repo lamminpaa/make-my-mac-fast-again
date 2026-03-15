@@ -29,15 +29,17 @@ struct AppSettings: Codable, Sendable {
         save()
     }
 
-    /// Remove stored settings from UserDefaults.
+    #if DEBUG
+    /// Remove stored settings from UserDefaults. Test-only.
     static func clearStorage() {
         UserDefaults.standard.removeObject(forKey: key)
     }
 
-    /// Write arbitrary string data to the settings key (for testing corrupted data recovery).
+    /// Write arbitrary string data to the settings key (for testing corrupted data recovery). Test-only.
     static func writeCorruptedStorage(_ string: String) {
         if let data = string.data(using: .utf8) {
             UserDefaults.standard.set(data, forKey: key)
         }
     }
+    #endif
 }

@@ -118,12 +118,12 @@ final class PrivilegedExecutor {
         logger.info("Executing privileged command: \(String(describing: command))")
         let shellCommand = try buildShellCommand(command)
 
+        // Escape characters special to AppleScript's do shell script (double-quoted context)
         let escapedCommand = shellCommand
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
             .replacingOccurrences(of: "$", with: "\\$")
             .replacingOccurrences(of: "`", with: "\\`")
-            .replacingOccurrences(of: "'", with: "'\\''")
 
         let appleScript = """
         do shell script "\(escapedCommand)" with administrator privileges

@@ -83,8 +83,9 @@ final class DNSFlushViewModel {
                 continue
             }
             do {
-                let command = server.contains(":") ? "ping6 -c 1 \(server)" : "ping -c 1 -t 2 \(server)"
-                let result = try await shell.run(command)
+                let executable = server.contains(":") ? "/sbin/ping6" : "/sbin/ping"
+                let args = server.contains(":") ? ["-c", "1", server] : ["-c", "1", "-t", "2", server]
+                let result = try await shell.run(executablePath: executable, arguments: args)
                 // Parse round-trip time from ping output
                 // Example line: "round-trip min/avg/max/stddev = 1.234/1.234/1.234/0.000 ms"
                 if let rtLine = result.output.components(separatedBy: "\n").last(where: { $0.contains("round-trip") }) {
