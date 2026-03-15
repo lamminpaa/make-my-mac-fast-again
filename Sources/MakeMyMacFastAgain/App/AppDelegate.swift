@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "app")
     private var window: NSWindow?
     private var settingsWindow: NSWindow?
+    private var statusBarController: StatusBarController?
     let appState = AppState()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -32,11 +33,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         appState.startMonitoring()
+        statusBarController = StatusBarController(appState: appState)
         setupMenu()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
+    }
+
+    func showMainWindow() {
+        if let window {
+            window.makeKeyAndOrderFront(nil)
+        }
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func setupMenu() {
