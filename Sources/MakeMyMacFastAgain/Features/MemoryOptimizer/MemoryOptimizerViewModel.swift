@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 struct PurgeHistoryEntry: Identifiable, Sendable {
     let id = UUID()
@@ -38,11 +39,11 @@ final class MemoryOptimizerViewModel {
             }
         }
 
-        var color: String {
+        var color: Color {
             switch self {
-            case .normal: return "green"
-            case .warning: return "yellow"
-            case .critical: return "red"
+            case .normal: return .green
+            case .warning: return .yellow
+            case .critical: return .red
             }
         }
     }
@@ -79,7 +80,7 @@ final class MemoryOptimizerViewModel {
         memoryBefore = memoryStats.used
 
         do {
-            _ = try await privilegedExecutor.run("/usr/sbin/purge")
+            _ = try await privilegedExecutor.run(.purgeMemory)
 
             // Wait for memory stats to settle
             try? await Task.sleep(for: .seconds(2))

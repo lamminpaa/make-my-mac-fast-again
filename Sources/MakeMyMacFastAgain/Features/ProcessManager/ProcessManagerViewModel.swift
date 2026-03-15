@@ -17,6 +17,13 @@ final class ProcessManagerViewModel {
     private var previousCPUTimes: [pid_t: Double] = [:]
     private var refreshInterval: Double = 3.0
     private let currentUsername = NSUserName()
+    private let ownPID = getpid()
+
+    /// PIDs that must never be killed (kernel idle process, launchd)
+    private static let protectedPIDs: Set<pid_t> = [0, 1]
+
+    /// Process names that must never be killed
+    private static let protectedNames: Set<String> = ["kernel_task"]
 
     enum SortOrder: String, CaseIterable, Sendable {
         case memory = "Memory"
@@ -100,6 +107,10 @@ final class ProcessManagerViewModel {
                 let percentage = delta / (refreshInterval * 1_000_000_000) * 100
                 currentProcesses[i].cpuPercentage = max(0, percentage)
             }
+
+            if isProcessProtected(pid: pid, name: currentProcesses[i].name) {
+                currentProcesses[i].isProtected = true
+            }
         }
 
         previousCPUTimes = newCPUTimes
@@ -107,7 +118,23 @@ final class ProcessManagerViewModel {
         statusMessage = "\(processes.count) processes"
     }
 
+    private func isProcessProtected(pid: pid_t, name: String) -> Bool {
+        pid == ownPID
+            || Self.protectedPIDs.contains(pid)
+            || Self.protectedNames.contains(name)
+    }
+
     func killProcess(_ process: AppProcessInfo) async {
+        if let reason = safetyCheckFailure(for: process) {
+            statusMessage = reason
+            return
+        }
+
+        if let reason = verifyProcessIdentity(process) {
+            statusMessage = reason
+            return
+        }
+
         let result = kill(process.pid, SIGTERM)
         if result == 0 {
             statusMessage = "Sent SIGTERM to \(process.name) (PID \(process.pid))"
@@ -119,6 +146,16 @@ final class ProcessManagerViewModel {
     }
 
     func forceKillProcess(_ process: AppProcessInfo) async {
+        if let reason = safetyCheckFailure(for: process) {
+            statusMessage = reason
+            return
+        }
+
+        if let reason = verifyProcessIdentity(process) {
+            statusMessage = reason
+            return
+        }
+
         let result = kill(process.pid, SIGKILL)
         if result == 0 {
             statusMessage = "Sent SIGKILL to \(process.name) (PID \(process.pid))"
@@ -127,5 +164,31 @@ final class ProcessManagerViewModel {
         }
         try? await Task.sleep(for: .milliseconds(500))
         refresh()
+    }
+
+    /// Returns a user-facing reason string if the process must not be killed, nil otherwise.
+    private func safetyCheckFailure(for process: AppProcessInfo) -> String? {
+        if process.pid == ownPID {
+            return "Cannot kill own application"
+        }
+        if Self.protectedPIDs.contains(process.pid) {
+            return "Cannot kill system process \(process.name) (PID \(process.pid))"
+        }
+        if Self.protectedNames.contains(process.name) {
+            return "Cannot kill protected process \(process.name)"
+        }
+        return nil
+    }
+
+    /// Re-reads the process to guard against PID reuse race conditions.
+    /// Returns a reason string if the process identity no longer matches, nil if safe to proceed.
+    private func verifyProcessIdentity(_ process: AppProcessInfo) -> String? {
+        guard let current = processService.getProcessInfo(pid: process.pid) else {
+            return "Process \(process.name) (PID \(process.pid)) no longer exists"
+        }
+        if current.name != process.name {
+            return "PID \(process.pid) is now \"\(current.name)\" (was \"\(process.name)\") — aborting kill to avoid targeting the wrong process"
+        }
+        return nil
     }
 }

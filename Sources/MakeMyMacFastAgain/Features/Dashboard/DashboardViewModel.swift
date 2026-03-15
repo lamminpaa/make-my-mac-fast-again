@@ -13,6 +13,7 @@ final class DashboardViewModel {
     var uptime: String = ""
     var cpuHistory: [Double] = []
     var memoryHistory: [Double] = []
+    var hasInitialData = false
 
     private static let maxHistorySamples = 30
 
@@ -61,6 +62,10 @@ final class DashboardViewModel {
 
         let allProcesses = processService.listProcesses()
         topProcesses = Array(allProcesses.sorted { $0.memoryBytes > $1.memoryBytes }.prefix(5))
+
+        if !hasInitialData {
+            hasInitialData = true
+        }
     }
 
     private func loadSystemInfo() {

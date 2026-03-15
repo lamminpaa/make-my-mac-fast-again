@@ -11,12 +11,16 @@ struct ProcessManagerView: View {
             FeatureHeader(title: "Process Manager", subtitle: "View and manage running processes") {
                 Button("Kill Selected") {
                     if let pid = viewModel.selectedProcessID,
-                       let process = viewModel.processes.first(where: { $0.pid == pid }) {
+                       let process = viewModel.processes.first(where: { $0.pid == pid }),
+                       !process.isProtected {
                         processToKill = process
                         showKillConfirmation = true
                     }
                 }
-                .disabled(viewModel.selectedProcessID == nil)
+                .disabled(viewModel.selectedProcessID == nil || {
+                    guard let pid = viewModel.selectedProcessID else { return true }
+                    return viewModel.processes.first(where: { $0.pid == pid })?.isProtected == true
+                }())
 
                 Button("Refresh") {
                     viewModel.refresh()
@@ -98,10 +102,14 @@ struct ProcessManagerView: View {
                         processToKill = process
                         showKillConfirmation = true
                     }
+                    .disabled(process.isProtected)
+
                     Button("Force Kill (SIGKILL)") {
                         processToKill = process
                         showKillConfirmation = true
                     }
+                    .disabled(process.isProtected)
+
                     Divider()
                     Button("Reveal in Activity Monitor") {
                         NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Activity Monitor.app"))

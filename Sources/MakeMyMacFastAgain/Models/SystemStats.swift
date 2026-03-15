@@ -47,6 +47,7 @@ struct AppProcessInfo: Identifiable, Sendable {
     var cpuPercentage: Double = 0
     var memoryBytes: UInt64
     var status: String
+    var isProtected: Bool = false
 }
 
 struct CacheCategory: Identifiable, Sendable {

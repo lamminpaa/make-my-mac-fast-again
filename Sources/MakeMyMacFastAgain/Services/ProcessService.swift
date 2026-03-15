@@ -64,6 +64,42 @@ final class ProcessService {
         return processes
     }
 
+    /// Look up a single process by PID, returning nil if it no longer exists.
+    func getProcessInfo(pid: pid_t) -> AppProcessInfo? {
+        var info = CSKProcessInfo()
+        var usage = CSKProcessResourceUsage()
+
+        guard csk_get_process_info(pid, &info) == 0 else { return nil }
+
+        let name = withUnsafePointer(to: &info.name) { ptr in
+            ptr.withMemoryRebound(to: CChar.self, capacity: 256) { charPtr in
+                String(cString: charPtr)
+            }
+        }
+
+        guard !name.isEmpty else { return nil }
+
+        var memoryBytes: UInt64 = 0
+        var cpuTime: Double = 0
+
+        if csk_get_process_resource_usage(pid, &usage) == 0 {
+            memoryBytes = usage.resident_size
+            cpuTime = usage.cpu_usage
+        }
+
+        let user = resolveUsername(uid: info.uid)
+
+        return AppProcessInfo(
+            id: pid,
+            pid: pid,
+            name: name,
+            user: user,
+            cpuUsage: cpuTime,
+            memoryBytes: memoryBytes,
+            status: processStatus(info.status)
+        )
+    }
+
     /// Build a PID-to-localized-name mapping from NSWorkspace running applications
     private func buildRunningAppNameLookup() -> [pid_t: String] {
         var lookup: [pid_t: String] = [:]

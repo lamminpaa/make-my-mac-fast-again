@@ -50,7 +50,7 @@ final class DNSFlushViewModel {
         flushSucceeded = nil
 
         do {
-            _ = try await privilegedExecutor.run("killall -HUP mDNSResponder")
+            _ = try await privilegedExecutor.run(.flushDNS)
             flushSucceeded = true
             lastFlushDate = Date()
             statusMessage = "DNS cache flushed successfully."
@@ -77,7 +77,11 @@ final class DNSFlushViewModel {
             serversToTest.insert(preset.server)
         }
 
+        let validServerPattern = /^[a-zA-Z0-9.:]+$/
         for server in serversToTest {
+            guard server.wholeMatch(of: validServerPattern) != nil else {
+                continue
+            }
             do {
                 let command = server.contains(":") ? "ping6 -c 1 \(server)" : "ping -c 1 -t 2 \(server)"
                 let result = try await shell.run(command)

@@ -5,54 +5,74 @@ struct DashboardView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                systemInfoBar
-
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible()),
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 16) {
-                    GaugeCard(
-                        title: "CPU",
-                        value: viewModel.cpuStats.totalUsage,
-                        subtitle: "User: \(ByteFormatter.formatPercentage(viewModel.cpuStats.userPercentage))",
-                        detail: "System: \(ByteFormatter.formatPercentage(viewModel.cpuStats.systemPercentage))"
-                    )
-
-                    GaugeCard(
-                        title: "Memory",
-                        value: viewModel.memoryStats.usagePercentage,
-                        subtitle: "\(ByteFormatter.format(viewModel.memoryStats.used)) used",
-                        detail: "of \(ByteFormatter.format(viewModel.memoryStats.total))"
-                    )
-
-                    GaugeCard(
-                        title: "Disk",
-                        value: viewModel.diskStats.usagePercentage,
-                        subtitle: "\(ByteFormatter.format(viewModel.diskStats.freeSpace)) free",
-                        detail: "of \(ByteFormatter.format(viewModel.diskStats.totalSpace))"
-                    )
-
-                    NetworkCard(
-                        rateIn: viewModel.networkStats.rateIn,
-                        rateOut: viewModel.networkStats.rateOut
-                    )
+            if viewModel.hasInitialData {
+                dashboardContent
+                    .transition(.opacity)
+            } else {
+                VStack(spacing: 16) {
+                    Spacer()
+                    ProgressView()
+                        .controlSize(.large)
+                    Text("Loading...")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
                 }
-
-                sparklineSection
-
-                networkDetailCard
-
-                memoryBreakdownCard
-
-                topProcessesCard
+                .frame(maxWidth: .infinity, minHeight: 300)
+                .padding()
             }
-            .padding()
         }
+        .animation(.easeIn(duration: 0.3), value: viewModel.hasInitialData)
         .onAppear { viewModel.startMonitoring() }
         .onDisappear { viewModel.stopMonitoring() }
+    }
+
+    private var dashboardContent: some View {
+        VStack(spacing: 20) {
+            systemInfoBar
+
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 16) {
+                GaugeCard(
+                    title: "CPU",
+                    value: viewModel.cpuStats.totalUsage,
+                    subtitle: "User: \(ByteFormatter.formatPercentage(viewModel.cpuStats.userPercentage))",
+                    detail: "System: \(ByteFormatter.formatPercentage(viewModel.cpuStats.systemPercentage))"
+                )
+
+                GaugeCard(
+                    title: "Memory",
+                    value: viewModel.memoryStats.usagePercentage,
+                    subtitle: "\(ByteFormatter.format(viewModel.memoryStats.used)) used",
+                    detail: "of \(ByteFormatter.format(viewModel.memoryStats.total))"
+                )
+
+                GaugeCard(
+                    title: "Disk",
+                    value: viewModel.diskStats.usagePercentage,
+                    subtitle: "\(ByteFormatter.format(viewModel.diskStats.freeSpace)) free",
+                    detail: "of \(ByteFormatter.format(viewModel.diskStats.totalSpace))"
+                )
+
+                NetworkCard(
+                    rateIn: viewModel.networkStats.rateIn,
+                    rateOut: viewModel.networkStats.rateOut
+                )
+            }
+
+            sparklineSection
+
+            networkDetailCard
+
+            memoryBreakdownCard
+
+            topProcessesCard
+        }
+        .padding()
     }
 
     private var systemInfoBar: some View {
