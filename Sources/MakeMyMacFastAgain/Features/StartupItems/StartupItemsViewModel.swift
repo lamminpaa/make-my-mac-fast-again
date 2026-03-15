@@ -42,7 +42,7 @@ final class StartupItemsViewModel {
         await checkRunningStatus()
 
         isLoading = false
-        logger.info("Found \(self.items.count) startup items")
+        logger.info("Found \(self.items.count, privacy: .public) startup items")
         statusMessage = "Found \(items.count) startup items."
         reportToAppState()
     }
@@ -171,7 +171,7 @@ final class StartupItemsViewModel {
 
             items[index].isEnabled.toggle()
             let status = items[index].isEnabled ? "enabled" : "disabled"
-            logger.info("\(item.label) \(status)")
+            logger.info("\(item.label, privacy: .public) \(status, privacy: .public)")
             statusMessage = "\(item.name) \(status)."
             reportToAppState()
         } catch {

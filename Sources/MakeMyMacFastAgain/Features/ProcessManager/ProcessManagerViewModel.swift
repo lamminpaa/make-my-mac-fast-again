@@ -1,9 +1,11 @@
 import Foundation
 import Darwin
+import os
 
 @MainActor
 @Observable
 final class ProcessManagerViewModel {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "process-manager")
     var processes: [AppProcessInfo] = []
     var searchText = ""
     var sortOrder: SortOrder = .memory
@@ -149,8 +151,10 @@ final class ProcessManagerViewModel {
 
         let result = kill(process.pid, SIGTERM)
         if result == 0 {
+            logger.info("Sent SIGTERM to \(process.name, privacy: .public) (PID \(process.pid, privacy: .public))")
             statusMessage = "Sent SIGTERM to \(process.name) (PID \(process.pid))"
         } else {
+            logger.warning("Failed to kill \(process.name, privacy: .public) (PID \(process.pid, privacy: .public)): \(String(cString: strerror(errno)))")
             statusMessage = "Failed to kill \(process.name): \(String(cString: strerror(errno)))"
         }
         try? await Task.sleep(for: .milliseconds(500))
@@ -170,8 +174,10 @@ final class ProcessManagerViewModel {
 
         let result = kill(process.pid, SIGKILL)
         if result == 0 {
+            logger.info("Sent SIGKILL to \(process.name, privacy: .public) (PID \(process.pid, privacy: .public))")
             statusMessage = "Sent SIGKILL to \(process.name) (PID \(process.pid))"
         } else {
+            logger.warning("Failed to force kill \(process.name, privacy: .public) (PID \(process.pid, privacy: .public)): \(String(cString: strerror(errno)))")
             statusMessage = "Failed to force kill \(process.name): \(String(cString: strerror(errno)))"
         }
         try? await Task.sleep(for: .milliseconds(500))

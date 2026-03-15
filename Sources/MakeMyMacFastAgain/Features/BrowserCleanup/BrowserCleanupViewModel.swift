@@ -265,7 +265,7 @@ final class BrowserCleanupViewModel {
                 try fm.removeItem(atPath: path)
             }
         } catch {
-            logger.warning("Failed to clean \(path): \(error.localizedDescription)")
+            logger.warning("Failed to clean \(path, privacy: .private): \(error.localizedDescription)")
         }
 
         let sizeAfter = await fileScanner.calculateDirectorySize(path)

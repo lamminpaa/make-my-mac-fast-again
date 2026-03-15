@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import os
 
 struct PurgeHistoryEntry: Identifiable, Sendable {
     let id = UUID()
@@ -10,6 +11,7 @@ struct PurgeHistoryEntry: Identifiable, Sendable {
 @MainActor
 @Observable
 final class MemoryOptimizerViewModel {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "memory-optimizer")
     var isPurging = false
     var statusMessage = ""
     var memoryBefore: UInt64 = 0
@@ -86,8 +88,10 @@ final class MemoryOptimizerViewModel {
                 purgeHistory = Array(purgeHistory.prefix(Self.maxPurgeHistory))
             }
 
+            logger.info("Memory purge complete. Freed \(ByteFormatter.format(freed), privacy: .public)")
             statusMessage = "Memory purge complete. Freed \(ByteFormatter.format(freed))."
         } catch {
+            logger.warning("Memory purge failed: \(error.localizedDescription)")
             statusMessage = "Memory purge failed: \(error.localizedDescription)"
         }
 

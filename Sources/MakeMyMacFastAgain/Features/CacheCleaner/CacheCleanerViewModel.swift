@@ -208,7 +208,7 @@ final class CacheCleanerViewModel {
                         _ = try await privilegedExecutor.run(.removeCache(path: path))
                     } catch {
                         failedCount += 1
-                        logger.warning("Failed to clean \(category.name) at \(path): \(error.localizedDescription)")
+                        logger.warning("Failed to clean \(category.name, privacy: .public) at \(path, privacy: .private): \(error.localizedDescription)")
                     }
                 } else {
                     let contents = (try? fileManager.contentsOfDirectory(atPath: path)) ?? []
@@ -218,7 +218,7 @@ final class CacheCleanerViewModel {
                             try fileManager.removeItem(atPath: itemPath)
                         } catch {
                             failedCount += 1
-                            logger.warning("Failed to remove \(itemPath): \(error.localizedDescription)")
+                            logger.warning("Failed to remove \(itemPath, privacy: .private): \(error.localizedDescription)")
                         }
                     }
                 }

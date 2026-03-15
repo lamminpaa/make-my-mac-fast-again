@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 struct DNSServerInfo: Sendable {
     let resolver: String
@@ -14,6 +15,7 @@ struct DNSPreset: Sendable {
 @MainActor
 @Observable
 final class DNSFlushViewModel {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "dns-flush")
     var isFlushing = false
     var statusMessage = ""
     var lastFlushDate: Date?
@@ -54,9 +56,11 @@ final class DNSFlushViewModel {
             _ = try await privilegedExecutor.run(.flushDNS)
             flushSucceeded = true
             lastFlushDate = Date()
+            logger.info("DNS cache flushed successfully")
             statusMessage = "DNS cache flushed successfully."
         } catch {
             flushSucceeded = false
+            logger.warning("DNS flush failed: \(error.localizedDescription)")
             statusMessage = "DNS flush failed: \(error.localizedDescription)"
         }
 
