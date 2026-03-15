@@ -10,8 +10,13 @@ final class StartupItemsViewModel {
     var runningStatus: [String: Bool] = [:]
     var impactLevel: [String: String] = [:]
 
+    private weak var appState: AppState?
     private let shell = ShellExecutor()
     private let privilegedExecutor = PrivilegedExecutor()
+
+    func bind(to appState: AppState) {
+        self.appState = appState
+    }
 
     func loadItems() async {
         isLoading = true
@@ -36,6 +41,16 @@ final class StartupItemsViewModel {
 
         isLoading = false
         statusMessage = "Found \(items.count) startup items."
+        reportToAppState()
+    }
+
+    private func reportToAppState() {
+        let enabledItems = items.filter(\.isEnabled)
+        appState?.totalEnabledStartupItems = enabledItems.count
+        appState?.enabledHighImpactStartupItems = enabledItems.filter { item in
+            let level = impactLevel[item.label] ?? "Low"
+            return level == "High" || level == "Medium"
+        }.count
     }
 
     private func getLoadedLabels() async -> Set<String> {
@@ -153,6 +168,7 @@ final class StartupItemsViewModel {
 
             items[index].isEnabled.toggle()
             statusMessage = "\(item.name) \(items[index].isEnabled ? "enabled" : "disabled")."
+            reportToAppState()
         } catch {
             statusMessage = "Failed to \(action.rawValue) \(item.name): \(error.localizedDescription)"
         }

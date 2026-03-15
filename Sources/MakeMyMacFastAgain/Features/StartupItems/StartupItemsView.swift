@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct StartupItemsView: View {
+    @Environment(\.appState) private var appState
     @State private var viewModel = StartupItemsViewModel()
 
     var body: some View {
@@ -45,6 +46,9 @@ struct StartupItemsView: View {
             }
         }
         .task {
+            if let appState {
+                viewModel.bind(to: appState)
+            }
             await viewModel.loadItems()
         }
     }

@@ -30,7 +30,11 @@ struct CacheCleanerView: View {
                 }
 
                 Button("Clean Selected", role: .destructive) {
-                    showCleanPreview = true
+                    if AppSettings.load().confirmBeforeCleanup {
+                        showCleanPreview = true
+                    } else {
+                        Task { await viewModel.cleanSelected() }
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(viewModel.totalSelectedSize == 0 || viewModel.isCleaning)
@@ -56,7 +60,9 @@ struct CacheCleanerView: View {
             }
         }
         .task {
-            viewModel.notificationService = appState?.notificationService
+            if let appState {
+                viewModel.bind(to: appState)
+            }
             viewModel.loadCategories()
             await viewModel.scanSizes()
         }
