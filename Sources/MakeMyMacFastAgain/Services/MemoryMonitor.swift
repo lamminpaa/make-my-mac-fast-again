@@ -1,8 +1,11 @@
 import Foundation
 import Darwin
+import os
 
 @MainActor
 final class MemoryMonitor {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "monitoring")
+
     func read() -> MemoryStats {
         var stats = MemoryStats()
 
@@ -20,7 +23,10 @@ final class MemoryMonitor {
             }
         }
 
-        guard result == KERN_SUCCESS else { return stats }
+        guard result == KERN_SUCCESS else {
+            logger.error("host_statistics64 failed with kern_return_t \(result)")
+            return stats
+        }
 
         let pageSize = UInt64(getpagesize())
 
@@ -32,6 +38,7 @@ final class MemoryMonitor {
 
         stats.used = stats.active + stats.wired + stats.compressed + stats.inactive
 
+        logger.debug("Memory read: used=\(stats.used) free=\(stats.free) total=\(stats.total)")
         return stats
     }
 }

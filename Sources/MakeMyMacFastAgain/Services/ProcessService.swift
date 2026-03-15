@@ -1,9 +1,12 @@
 import Foundation
 import AppKit
 import CSystemKit
+import os
 
 @MainActor
 final class ProcessService {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "process")
+
     func listProcesses() -> [AppProcessInfo] {
         // Build PID -> localizedName lookup from running GUI applications
         let runningAppNames = buildRunningAppNameLookup()
@@ -11,7 +14,10 @@ final class ProcessService {
         var pids = [pid_t](repeating: 0, count: 2048)
         let count = csk_get_all_pids(&pids, Int32(pids.count))
 
-        guard count > 0 else { return [] }
+        guard count > 0 else {
+            logger.error("csk_get_all_pids returned \(count)")
+            return []
+        }
 
         var processes: [AppProcessInfo] = []
 
@@ -61,6 +67,7 @@ final class ProcessService {
             ))
         }
 
+        logger.debug("listProcesses: found \(processes.count) processes")
         return processes
     }
 

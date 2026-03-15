@@ -28,11 +28,13 @@ struct GaugeCard: View {
                     .stroke(gaugeColor, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                     .frame(width: 80, height: 80)
                     .rotationEffect(.degrees(-90))
-                    .animation(.easeInOut(duration: 0.5), value: value)
+                    .animation(.smooth(duration: 0.5), value: value)
 
                 Text(ByteFormatter.formatPercentage(value))
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(gaugeColor)
+                    .contentTransition(.numericText())
+                    .animation(.smooth(duration: 0.5), value: value)
             }
 
             VStack(spacing: 2) {

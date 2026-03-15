@@ -192,6 +192,12 @@ final class BrowserCleanupViewModel {
 
         isCleaning = false
         statusMessage = "Freed \(ByteFormatter.format(freedSpace)) from browser data."
+
+        if freedSpace > 0 {
+            var settings = AppSettings.load()
+            settings.recordCleanup(freedBytes: freedSpace)
+        }
+
         await scanSizes()
     }
 

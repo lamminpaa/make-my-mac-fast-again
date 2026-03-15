@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import os
 
 enum LaunchctlAction: String, Sendable {
     case enable
@@ -14,6 +15,8 @@ enum PrivilegedCommand: Sendable {
 }
 
 final class PrivilegedExecutor {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "privileged")
+
     enum PrivilegedError: LocalizedError {
         case authorizationFailed
         case scriptError(String)
@@ -58,7 +61,7 @@ final class PrivilegedExecutor {
         return false
     }
 
-    private func buildShellCommand(_ command: PrivilegedCommand) throws -> String {
+    func buildShellCommand(_ command: PrivilegedCommand) throws -> String {
         switch command {
         case .flushDNS:
             return "killall -HUP mDNSResponder"
@@ -112,6 +115,7 @@ final class PrivilegedExecutor {
 
     @MainActor
     func run(_ command: PrivilegedCommand) async throws -> String {
+        logger.info("Executing privileged command: \(String(describing: command))")
         let shellCommand = try buildShellCommand(command)
 
         let escapedCommand = shellCommand
@@ -132,10 +136,13 @@ final class PrivilegedExecutor {
             if let error = errorDict {
                 let message = error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
                 if message.contains("User canceled") || message.contains("-128") {
+                    logger.error("Privileged command denied by user")
                     throw PrivilegedError.authorizationFailed
                 }
+                logger.error("Privileged command failed: \(message)")
                 throw PrivilegedError.scriptError(message)
             }
+            logger.error("Privileged command failed: authorization error")
             throw PrivilegedError.authorizationFailed
         }
 

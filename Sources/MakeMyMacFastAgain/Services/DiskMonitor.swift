@@ -1,7 +1,10 @@
 import Foundation
+import os
 
 @MainActor
 final class DiskMonitor {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "monitoring")
+
     func read() -> DiskStats {
         var stats = DiskStats()
 
@@ -31,6 +34,7 @@ final class DiskMonitor {
             }
         }
 
+        logger.debug("Disk read: total=\(stats.totalSpace) free=\(stats.freeSpace)")
         return stats
     }
 }

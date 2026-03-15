@@ -29,8 +29,16 @@ struct ContentView: View {
             ForEach(NavigationSection.allCases, id: \.self) { section in
                 Section(section.rawValue) {
                     ForEach(NavigationItem.items(for: section), id: \.self) { item in
-                        Label(item.rawValue, systemImage: item.systemImage)
-                            .tag(item)
+                        HStack {
+                            Label(item.rawValue, systemImage: item.systemImage)
+                            Spacer()
+                            if let hint = item.shortcutHint {
+                                Text("\u{2318}\(hint)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .tag(item)
                     }
                 }
             }

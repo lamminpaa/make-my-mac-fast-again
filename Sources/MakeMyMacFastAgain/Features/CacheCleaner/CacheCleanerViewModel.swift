@@ -209,6 +209,11 @@ final class CacheCleanerViewModel {
             statusMessage = "Freed \(ByteFormatter.format(freedSpace))."
         }
 
+        if freedSpace > 0 {
+            var settings = AppSettings.load()
+            settings.recordCleanup(freedBytes: freedSpace)
+        }
+
         // Clear cached details since contents changed
         categoryDetails.removeAll()
         fileCount.removeAll()

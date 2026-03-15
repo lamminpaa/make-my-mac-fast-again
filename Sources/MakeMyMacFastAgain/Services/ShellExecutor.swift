@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Errors that can occur during shell command execution.
 enum ShellError: Error, Sendable {
@@ -9,6 +10,8 @@ enum ShellError: Error, Sendable {
 }
 
 actor ShellExecutor {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "shell")
+
     struct CommandResult: Sendable {
         let output: String
         let errorOutput: String
@@ -27,11 +30,21 @@ actor ShellExecutor {
         _ command: String,
         timeout: TimeInterval = ShellExecutor.defaultTimeout
     ) async throws -> CommandResult {
-        try await executeProcess(
-            executablePath: "/bin/zsh",
-            arguments: ["-c", command],
-            timeout: timeout
-        )
+        logger.debug("Running shell command: \(command, privacy: .private)")
+        do {
+            let result = try await executeProcess(
+                executablePath: "/bin/zsh",
+                arguments: ["-c", command],
+                timeout: timeout
+            )
+            if !result.succeeded {
+                logger.error("Shell command exited with code \(result.exitCode): \(result.errorOutput, privacy: .private)")
+            }
+            return result
+        } catch {
+            logger.error("Shell command failed: \(error.localizedDescription)")
+            throw error
+        }
     }
 
     /// Run an executable directly with an arguments array.
@@ -44,8 +57,10 @@ actor ShellExecutor {
         timeout: TimeInterval = ShellExecutor.defaultTimeout
     ) async throws -> CommandResult {
         guard FileManager.default.fileExists(atPath: executablePath) else {
+            logger.error("Executable not found: \(executablePath)")
             throw ShellError.executableNotFound(executablePath)
         }
+        logger.debug("Running executable: \(executablePath)")
         return try await executeProcess(
             executablePath: executablePath,
             arguments: arguments,

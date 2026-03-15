@@ -33,7 +33,11 @@ struct DashboardView: View {
 
     private var dashboardContent: some View {
         VStack(spacing: 20) {
+            HealthScoreGauge()
+
             systemInfoBar
+
+            lastCleanupBar
 
             LazyVGrid(columns: [
                 GridItem(.flexible()),
@@ -90,6 +94,33 @@ struct DashboardView: View {
         .foregroundStyle(.secondary)
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private var lastCleanupBar: some View {
+        let settings = AppSettings.load()
+        if let date = settings.lastCleanupDate {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text("Last cleanup: \(Self.relativeDate(date))")
+                if let freed = settings.lastCleanupFreedBytes {
+                    Text("Freed \(ByteFormatter.format(freed))")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .font(.caption)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private static func relativeDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     private var networkDetailCard: some View {

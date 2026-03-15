@@ -1,6 +1,8 @@
 import Foundation
+import os
 
 actor FileScanner {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "scanner")
     struct ScanProgress: Sendable {
         var filesScanned: Int
         var largeFilesFound: Int
@@ -29,6 +31,7 @@ actor FileScanner {
         minSize: UInt64,
         onProgress: @Sendable @escaping (ScanProgress) -> Void
     ) async -> [LargeFile] {
+        logger.debug("Starting scan in \(directory) for files >= \(minSize) bytes")
         var results: [LargeFile] = []
         var progress = ScanProgress(filesScanned: 0, largeFilesFound: 0, currentPath: "")
 
@@ -77,6 +80,7 @@ actor FileScanner {
         progress.currentPath = "Scan complete"
         onProgress(progress)
 
+        logger.info("Scan complete: \(results.count) large files found in \(directory)")
         return results.sorted { $0.size > $1.size }
     }
 

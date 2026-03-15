@@ -1,13 +1,16 @@
 import AppKit
 import SwiftUI
+import os
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "app")
     private var window: NSWindow?
     private var settingsWindow: NSWindow?
     let appState = AppState()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        logger.info("Application did finish launching")
         let contentView = ContentView()
             .environment(\.appState, appState)
 
