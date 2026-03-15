@@ -42,18 +42,24 @@ final class AppState {
 
     // MARK: - Health Score
 
-    var healthScore: Int {
-        let diskScore = usageToScore(diskStats.usagePercentage)
-        let memoryScore = usageToScore(memoryStats.usagePercentage)
-        let startupScore = computeStartupScore()
-        let cacheScore = computeCacheScore()
-        let zombieScore = max(0.0, 100.0 - Double(zombieProcessCount) * 5.0)
+    /// Individual sub-scores for health breakdown display.
+    var healthScoreBreakdown: HealthScoreBreakdown {
+        HealthScoreBreakdown(
+            diskScore: usageToScore(diskStats.usagePercentage),
+            memoryScore: usageToScore(memoryStats.usagePercentage),
+            startupScore: computeStartupScore(),
+            cacheScore: computeCacheScore(),
+            zombieScore: max(0.0, 100.0 - Double(zombieProcessCount) * 5.0)
+        )
+    }
 
-        let weighted = diskScore * 0.30
-            + memoryScore * 0.25
-            + startupScore * 0.20
-            + cacheScore * 0.15
-            + zombieScore * 0.10
+    var healthScore: Int {
+        let b = healthScoreBreakdown
+        let weighted = b.diskScore * 0.30
+            + b.memoryScore * 0.25
+            + b.startupScore * 0.20
+            + b.cacheScore * 0.15
+            + b.zombieScore * 0.10
 
         return Int(weighted.rounded())
     }
@@ -127,6 +133,20 @@ final class AppState {
                 self?.refresh()
             }
         }
+    }
+
+    /// Invalidates the current timer and creates a new one with the current settings interval.
+    /// Called from SettingsView when the user changes the dashboard refresh interval.
+    func restartMonitoring() {
+        let interval = AppSettings.load().dashboardRefreshInterval
+        logger.info("Restarting monitoring timer with interval \(interval)s")
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.refresh()
+            }
+        }
+        refresh()
     }
 
     func stopMonitoring() {

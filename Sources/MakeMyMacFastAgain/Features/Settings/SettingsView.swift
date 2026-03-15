@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(\.appState) private var appState
     @State private var settings = AppSettings.load()
 
     var body: some View {
@@ -32,7 +33,7 @@ struct SettingsView: View {
             } header: {
                 Text("Monitoring")
             } footer: {
-                Text("Interval changes take effect when you switch tabs.")
+                Text("Dashboard updates immediately. Process manager applies on next visit.")
                     .foregroundStyle(.secondary)
             }
 
@@ -43,7 +44,10 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 450, height: 300)
-        .onChange(of: settings.dashboardRefreshInterval) { _, _ in settings.save() }
+        .onChange(of: settings.dashboardRefreshInterval) { _, _ in
+            settings.save()
+            appState?.restartMonitoring()
+        }
         .onChange(of: settings.processRefreshInterval) { _, _ in settings.save() }
         .onChange(of: settings.confirmBeforeCleanup) { _, _ in settings.save() }
         .onChange(of: settings.confirmBeforeKillProcess) { _, _ in settings.save() }
