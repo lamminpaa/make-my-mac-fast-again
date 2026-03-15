@@ -136,7 +136,7 @@ struct ProcessManagerView: View {
                 EmptyView()
             }
         }
-        .onAppear {
+        .task {
             if let appState {
                 viewModel.bind(to: appState)
             }
