@@ -26,6 +26,7 @@ final class DNSFlushViewModel {
     let dnsPresets: [DNSPreset] = [
         DNSPreset(name: "Cloudflare", server: "1.1.1.1"),
         DNSPreset(name: "Google", server: "8.8.8.8"),
+        DNSPreset(name: "Quad9", server: "9.9.9.9"),
         DNSPreset(name: "OpenDNS", server: "208.67.222.222"),
     ]
 

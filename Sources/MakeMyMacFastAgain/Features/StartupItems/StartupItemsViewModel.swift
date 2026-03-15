@@ -1,9 +1,11 @@
 import AppKit
 import Foundation
+import os
 
 @MainActor
 @Observable
 final class StartupItemsViewModel {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "startup-items")
     var items: [StartupItem] = []
     var isLoading = false
     var statusMessage = ""
@@ -40,6 +42,7 @@ final class StartupItemsViewModel {
         await checkRunningStatus()
 
         isLoading = false
+        logger.info("Found \(self.items.count) startup items")
         statusMessage = "Found \(items.count) startup items."
         reportToAppState()
     }
@@ -167,9 +170,12 @@ final class StartupItemsViewModel {
             }
 
             items[index].isEnabled.toggle()
-            statusMessage = "\(item.name) \(items[index].isEnabled ? "enabled" : "disabled")."
+            let status = items[index].isEnabled ? "enabled" : "disabled"
+            logger.info("\(item.label) \(status)")
+            statusMessage = "\(item.name) \(status)."
             reportToAppState()
         } catch {
+            logger.warning("Failed to \(action.rawValue, privacy: .public) \(item.label, privacy: .public): \(error.localizedDescription)")
             statusMessage = "Failed to \(action.rawValue) \(item.name): \(error.localizedDescription)"
         }
     }

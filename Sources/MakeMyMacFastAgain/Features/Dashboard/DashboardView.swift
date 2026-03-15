@@ -24,7 +24,7 @@ struct DashboardView: View {
             }
         }
         .animation(.easeIn(duration: 0.3), value: viewModel.hasInitialData)
-        .onAppear {
+        .task {
             if let appState {
                 viewModel.bind(to: appState)
             }

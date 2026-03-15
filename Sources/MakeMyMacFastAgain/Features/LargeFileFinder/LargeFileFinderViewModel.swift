@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import os
 
 struct FileTypeBreakdown: Identifiable, Sendable {
     let id = UUID()
@@ -11,6 +12,7 @@ struct FileTypeBreakdown: Identifiable, Sendable {
 @MainActor
 @Observable
 final class LargeFileFinderViewModel {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "large-file-finder")
     var files: [LargeFile] = []
     var isScanning = false
     var filesScanned = 0
@@ -129,6 +131,7 @@ final class LargeFileFinderViewModel {
                 freedSpace += file.size
                 trashed += 1
             } catch {
+                logger.warning("Failed to trash \(file.name, privacy: .public) at \(file.path, privacy: .private): \(error.localizedDescription)")
                 statusMessage = "Failed to trash \(file.name): \(error.localizedDescription)"
             }
         }
