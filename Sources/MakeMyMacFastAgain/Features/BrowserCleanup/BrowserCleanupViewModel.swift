@@ -14,7 +14,13 @@ final class BrowserCleanupViewModel {
     /// Set by the view to enable cleanup-complete notifications.
     var notificationService: NotificationService?
 
+    private weak var appState: AppState?
     private let fileScanner = FileScanner()
+
+    func bind(to appState: AppState) {
+        self.appState = appState
+        self.notificationService = appState.notificationService
+    }
 
     var totalCacheSize: UInt64 {
         browsers.filter(\.isInstalled).reduce(0) { $0 + $1.cacheSize }
@@ -171,11 +177,23 @@ final class BrowserCleanupViewModel {
         statusMessage = "Found \(ByteFormatter.format(totalCacheSize)) in browser caches."
     }
 
+    /// Returns names of installed browsers with cache data that are currently running.
+    var runningBrowsersWithData: [String] {
+        browsers.filter { $0.isInstalled && $0.cacheSize > 0 && isBrowserRunning($0.browser) }
+            .map(\.browser)
+    }
+
     func cleanBrowsers() async {
         isCleaning = true
         var freedSpace: UInt64 = 0
+        var skippedBrowsers: [String] = []
 
         for browser in browsers where browser.isInstalled && browser.cacheSize > 0 {
+            // Skip running browsers to prevent data corruption
+            if isBrowserRunning(browser.browser) {
+                skippedBrowsers.append(browser.browser)
+                continue
+            }
             statusMessage = "Cleaning \(browser.browser)..."
 
             if cleanCache {
@@ -194,7 +212,11 @@ final class BrowserCleanupViewModel {
         await fileScanner.invalidateCache()
 
         isCleaning = false
-        statusMessage = "Freed \(ByteFormatter.format(freedSpace)) from browser data."
+        var message = "Freed \(ByteFormatter.format(freedSpace)) from browser data."
+        if !skippedBrowsers.isEmpty {
+            message += " Skipped \(skippedBrowsers.joined(separator: ", ")) (still running)."
+        }
+        statusMessage = message
 
         if freedSpace > 0 {
             var settings = AppSettings.load()

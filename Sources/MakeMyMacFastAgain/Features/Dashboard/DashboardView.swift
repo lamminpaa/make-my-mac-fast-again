@@ -98,13 +98,12 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var lastCleanupBar: some View {
-        let settings = AppSettings.load()
-        if let date = settings.lastCleanupDate {
+        if let date = viewModel.lastCleanupDate {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                 Text("Last cleanup: \(Self.relativeDate(date))")
-                if let freed = settings.lastCleanupFreedBytes {
+                if let freed = viewModel.lastCleanupFreedBytes {
                     Text("Freed \(ByteFormatter.format(freed))")
                         .foregroundStyle(.secondary)
                 }

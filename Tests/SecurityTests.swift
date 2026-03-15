@@ -281,3 +281,116 @@ struct ShellExecutorTests {
         #expect(result.errorOutput == "error_msg")
     }
 }
+
+// MARK: - Health Score Tests
+
+@Suite("Health Score Tests")
+struct HealthScoreTests {
+    @Test("Health score is in valid range 0-100")
+    @MainActor
+    func scoreInValidRange() {
+        let state = AppState()
+        let score = state.healthScore
+        #expect(score >= 0 && score <= 100)
+    }
+
+    @Test("Healthy system scores above 60")
+    @MainActor
+    func healthySystemScoresWell() {
+        let state = AppState()
+        // Low usage = healthy
+        state.diskStats = DiskStats(totalSpace: 1_000_000_000_000, freeSpace: 700_000_000_000)
+        state.memoryStats = MemoryStats(total: 16_000_000_000, used: 6_000_000_000)
+        state.zombieProcessCount = 0
+        state.enabledHighImpactStartupItems = 2
+        state.totalEnabledStartupItems = 5
+        state.totalCacheBytes = 500_000_000 // 500 MB on 1 TB = 0.05%
+        let score = state.healthScore
+        #expect(score >= 60, "Healthy system should score above 60, got \(score)")
+    }
+
+    @Test("Stressed system scores below 50")
+    @MainActor
+    func stressedSystemScoresLow() {
+        let state = AppState()
+        // High usage = stressed
+        state.diskStats = DiskStats(totalSpace: 500_000_000_000, freeSpace: 25_000_000_000) // 95% full
+        state.memoryStats = MemoryStats(total: 8_000_000_000, used: 7_600_000_000) // 95% used
+        state.zombieProcessCount = 10
+        state.enabledHighImpactStartupItems = 10
+        state.totalEnabledStartupItems = 15
+        state.totalCacheBytes = 30_000_000_000 // 6% of disk
+        let score = state.healthScore
+        #expect(score < 50, "Stressed system should score below 50, got \(score)")
+    }
+
+    @Test("Zombie penalty is gradual with softened multiplier")
+    @MainActor
+    func zombiePenaltyIsGradual() {
+        let state = AppState()
+        state.diskStats = DiskStats(totalSpace: 1_000_000_000_000, freeSpace: 700_000_000_000)
+        state.memoryStats = MemoryStats(total: 16_000_000_000, used: 6_000_000_000)
+        state.totalEnabledStartupItems = 1
+        state.enabledHighImpactStartupItems = 0
+        state.totalCacheBytes = 100_000_000
+
+        // No zombies
+        state.zombieProcessCount = 0
+        let scoreNoZombies = state.healthScore
+
+        // 5 zombies — should reduce score slightly, not drastically
+        state.zombieProcessCount = 5
+        let score5Zombies = state.healthScore
+
+        let difference = scoreNoZombies - score5Zombies
+        // 5 zombies * 5 per zombie = 25 reduction in zombie sub-score
+        // Zombie weight is 10%, so impact should be ~2-3 points total
+        #expect(difference > 0, "Zombies should reduce score")
+        #expect(difference < 10, "5 zombies should not reduce score by more than 10, got \(difference)")
+    }
+
+    @Test("Startup score uses real data when items are scanned")
+    @MainActor
+    func startupScoreUsesRealData() {
+        let state = AppState()
+        state.diskStats = DiskStats(totalSpace: 1_000_000_000_000, freeSpace: 700_000_000_000)
+        state.memoryStats = MemoryStats(total: 16_000_000_000, used: 6_000_000_000)
+        state.zombieProcessCount = 0
+        state.totalCacheBytes = 100_000_000
+
+        // No startup items scanned yet — neutral
+        state.totalEnabledStartupItems = 0
+        state.enabledHighImpactStartupItems = 0
+        let scoreNoData = state.healthScore
+
+        // Many high-impact items — should lower score
+        state.totalEnabledStartupItems = 15
+        state.enabledHighImpactStartupItems = 10
+        let scoreManyItems = state.healthScore
+
+        #expect(scoreManyItems < scoreNoData,
+                "Many high-impact startup items should lower score")
+    }
+
+    @Test("Cache score responds to cache size relative to disk")
+    @MainActor
+    func cacheScoreRespondsToSize() {
+        let state = AppState()
+        state.diskStats = DiskStats(totalSpace: 1_000_000_000_000, freeSpace: 700_000_000_000)
+        state.memoryStats = MemoryStats(total: 16_000_000_000, used: 6_000_000_000)
+        state.zombieProcessCount = 0
+        state.totalEnabledStartupItems = 1
+        state.enabledHighImpactStartupItems = 0
+
+        // Small cache = good score
+        state.totalCacheBytes = 1_000_000_000 // 1 GB = 0.1% of 1 TB
+        let scoreSmallCache = state.healthScore
+
+        // Large cache = worse score
+        state.totalCacheBytes = 60_000_000_000 // 60 GB = 6% of 1 TB
+        let scoreLargeCache = state.healthScore
+
+        #expect(scoreSmallCache > scoreLargeCache,
+                "Larger cache should result in lower health score")
+    }
+}

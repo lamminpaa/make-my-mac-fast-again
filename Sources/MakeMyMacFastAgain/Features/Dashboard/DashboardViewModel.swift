@@ -20,7 +20,18 @@ final class DashboardViewModel {
     var hasInitialData: Bool { appState?.hasInitialData ?? false }
     var topProcesses: [AppProcessInfo] { appState?.topProcesses ?? [] }
 
+    /// Cached settings — loaded once on bind, refreshed after cleanup.
+    var lastCleanupDate: Date?
+    var lastCleanupFreedBytes: UInt64?
+
     func bind(to appState: AppState) {
         self.appState = appState
+        reloadSettings()
+    }
+
+    func reloadSettings() {
+        let settings = AppSettings.load()
+        lastCleanupDate = settings.lastCleanupDate
+        lastCleanupFreedBytes = settings.lastCleanupFreedBytes
     }
 }

@@ -29,7 +29,11 @@ struct BrowserCleanupView: View {
                 }
 
                 Button("Clean All", role: .destructive) {
-                    showConfirmation = true
+                    if AppSettings.load().confirmBeforeCleanup {
+                        showConfirmation = true
+                    } else {
+                        Task { await viewModel.cleanBrowsers() }
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(viewModel.totalCacheSize == 0 || viewModel.isCleaning)
@@ -71,7 +75,9 @@ struct BrowserCleanupView: View {
             }
         }
         .task {
-            viewModel.notificationService = appState?.notificationService
+            if let appState {
+                viewModel.bind(to: appState)
+            }
             viewModel.loadBrowsers()
             await viewModel.scanSizes()
         }
@@ -81,11 +87,14 @@ struct BrowserCleanupView: View {
                 Task { await viewModel.cleanBrowsers() }
             }
         } message: {
-            var msg = "This will delete browser"
-            if viewModel.cleanCache { msg += " cache" }
-            if viewModel.cleanCookies { msg += " and cookies" }
-            msg += ". Close browsers first for best results."
-            return Text(msg)
+            let running = viewModel.runningBrowsersWithData
+            if running.isEmpty {
+                let types = [viewModel.cleanCache ? "cache" : nil, viewModel.cleanCookies ? "cookies" : nil]
+                    .compactMap { $0 }.joined(separator: " and ")
+                Text("This will delete browser \(types).")
+            } else {
+                Text("Running browsers will be skipped: \(running.joined(separator: ", ")). Quit them first to clean their data.")
+            }
         }
     }
 

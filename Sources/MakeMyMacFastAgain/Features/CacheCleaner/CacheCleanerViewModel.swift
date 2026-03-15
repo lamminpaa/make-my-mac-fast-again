@@ -19,10 +19,16 @@ final class CacheCleanerViewModel {
     /// Set by the view to enable cleanup-complete notifications.
     var notificationService: NotificationService?
 
+    private weak var appState: AppState?
     private let fileScanner = FileScanner()
     private let shell = ShellExecutor()
     private let privilegedExecutor = PrivilegedExecutor()
     private var scanTask: Task<Void, Never>?
+
+    func bind(to appState: AppState) {
+        self.appState = appState
+        self.notificationService = appState.notificationService
+    }
 
     var totalSelectedSize: UInt64 {
         categories.filter(\.isSelected).reduce(0) { $0 + $1.size }
@@ -115,6 +121,7 @@ final class CacheCleanerViewModel {
             currentScanIndex = nil
             isScanning = false
             statusMessage = "Scan complete. Found \(ByteFormatter.format(totalSize)) in caches."
+            appState?.totalCacheBytes = totalSize
         }
         await scanTask?.value
     }
@@ -222,6 +229,7 @@ final class CacheCleanerViewModel {
         categoryDetails.removeAll()
         fileCount.removeAll()
 
+        // Re-scan updates totalSize and reports to AppState
         await scanSizes()
     }
 }

@@ -14,8 +14,12 @@ struct ProcessManagerView: View {
                     if let pid = viewModel.selectedProcessID,
                        let process = viewModel.processes.first(where: { $0.pid == pid }),
                        !process.isProtected {
-                        processToKill = process
-                        showKillConfirmation = true
+                        if AppSettings.load().confirmBeforeKillProcess {
+                            processToKill = process
+                            showKillConfirmation = true
+                        } else {
+                            Task { await viewModel.killProcess(process) }
+                        }
                     }
                 }
                 .disabled(viewModel.selectedProcessID == nil || {
@@ -100,14 +104,22 @@ struct ProcessManagerView: View {
                 if let pid = pids.first,
                    let process = viewModel.processes.first(where: { $0.pid == pid }) {
                     Button("Kill (SIGTERM)") {
-                        processToKill = process
-                        showKillConfirmation = true
+                        if AppSettings.load().confirmBeforeKillProcess {
+                            processToKill = process
+                            showKillConfirmation = true
+                        } else {
+                            Task { await viewModel.killProcess(process) }
+                        }
                     }
                     .disabled(process.isProtected)
 
                     Button("Force Kill (SIGKILL)") {
-                        processToKill = process
-                        showKillConfirmation = true
+                        if AppSettings.load().confirmBeforeKillProcess {
+                            processToKill = process
+                            showKillConfirmation = true
+                        } else {
+                            Task { await viewModel.forceKillProcess(process) }
+                        }
                     }
                     .disabled(process.isProtected)
 

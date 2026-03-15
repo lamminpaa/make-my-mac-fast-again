@@ -28,14 +28,26 @@ final class AppState {
 
     var hasInitialData = false
 
+    // MARK: - Health Score Inputs
+
+    /// Number of enabled startup items with high impact (KeepAlive/RunAtLoad).
+    /// Updated by StartupItemsViewModel after scanning.
+    var enabledHighImpactStartupItems: Int = 0
+
+    /// Total enabled startup items. Updated by StartupItemsViewModel after scanning.
+    var totalEnabledStartupItems: Int = 0
+
+    /// Total cache size in bytes. Updated by CacheCleanerViewModel after scanning.
+    var totalCacheBytes: UInt64 = 0
+
     // MARK: - Health Score
 
     var healthScore: Int {
         let diskScore = usageToScore(diskStats.usagePercentage)
         let memoryScore = usageToScore(memoryStats.usagePercentage)
-        let startupScore = 80.0  // placeholder — startup items not in AppState
-        let cacheScore = 70.0    // placeholder — cache size not in AppState
-        let zombieScore = max(0.0, 100.0 - Double(zombieProcessCount) * 20.0)
+        let startupScore = computeStartupScore()
+        let cacheScore = computeCacheScore()
+        let zombieScore = max(0.0, 100.0 - Double(zombieProcessCount) * 5.0)
 
         let weighted = diskScore * 0.30
             + memoryScore * 0.25
@@ -44,6 +56,31 @@ final class AppState {
             + zombieScore * 0.10
 
         return Int(weighted.rounded())
+    }
+
+    /// Startup score: penalizes high-impact items (KeepAlive/RunAtLoad).
+    /// 0 high-impact items = 100, each one subtracts 8 points, floor at 20.
+    private func computeStartupScore() -> Double {
+        if totalEnabledStartupItems == 0 && enabledHighImpactStartupItems == 0 {
+            // No data yet (startup items not scanned) — neutral score
+            return 80.0
+        }
+        let penalty = Double(enabledHighImpactStartupItems) * 8.0
+        return max(20.0, 100.0 - penalty)
+    }
+
+    /// Cache score: based on cache size relative to total disk space.
+    /// <0.5% disk = 100, linearly decreasing to 20 at 5%+ of disk.
+    private func computeCacheScore() -> Double {
+        guard diskStats.totalSpace > 0, totalCacheBytes > 0 else {
+            // No data yet — neutral score
+            return 80.0
+        }
+        let cachePercent = Double(totalCacheBytes) / Double(diskStats.totalSpace) * 100.0
+        if cachePercent < 0.5 { return 100.0 }
+        if cachePercent > 5.0 { return 20.0 }
+        // Linear interpolation: 0.5% → 100, 5% → 20
+        return 100.0 - (cachePercent - 0.5) / 4.5 * 80.0
     }
 
     var healthScoreLabel: String {
