@@ -11,7 +11,13 @@ import os
 @MainActor
 final class NotificationService: NSObject {
     private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "notifications")
-    private let center = UNUserNotificationCenter.current()
+
+    /// Lazily initialized — UNUserNotificationCenter.current() crashes if the app
+    /// has no proper bundle (e.g. running as a bare debug binary from `swift run`).
+    private var center: UNUserNotificationCenter?
+
+    /// Whether setup has been attempted.
+    private var isSetUp = false
 
     /// Tracks the last time each notification category was posted, keyed by category identifier.
     private var lastNotificationTimes: [String: Date] = [:]
@@ -31,14 +37,34 @@ final class NotificationService: NSObject {
 
     override init() {
         super.init()
-        center.delegate = self
+    }
+
+    /// Lazily sets up the notification center on first use. Returns false if
+    /// UNUserNotificationCenter is unavailable (no bundle).
+    private func setUp() -> Bool {
+        guard !isSetUp else { return center != nil }
+        isSetUp = true
+
+        // UNUserNotificationCenter.current() requires a valid bundle proxy.
+        // When running from `swift run` (bare binary) this will crash, so we
+        // guard with Bundle.main.bundleIdentifier.
+        guard Bundle.main.bundleIdentifier != nil else {
+            logger.warning("No bundle identifier — notifications unavailable (running outside .app bundle)")
+            return false
+        }
+
+        let notificationCenter = UNUserNotificationCenter.current()
+        notificationCenter.delegate = self
+        self.center = notificationCenter
         requestAuthorization()
         registerCategories()
+        return true
     }
 
     // MARK: - Authorization
 
     private func requestAuthorization() {
+        guard let center else { return }
         Task {
             do {
                 let granted = try await center.requestAuthorization(options: [.alert, .sound])
@@ -55,6 +81,7 @@ final class NotificationService: NSObject {
 
     /// Registers notification categories so the system can group them.
     private func registerCategories() {
+        guard let center else { return }
         let categories: Set<UNNotificationCategory> = [
             UNNotificationCategory(identifier: Category.highMemory, actions: [], intentIdentifiers: []),
             UNNotificationCategory(identifier: Category.lowDisk, actions: [], intentIdentifiers: []),
@@ -98,6 +125,8 @@ final class NotificationService: NSObject {
 
     /// Schedules a local notification, respecting the per-category throttle.
     private func scheduleNotification(category: String, title: String, body: String) {
+        guard setUp(), let center else { return }
+
         guard !isThrottled(category: category) else {
             logger.debug("Notification throttled for category: \(category)")
             return
