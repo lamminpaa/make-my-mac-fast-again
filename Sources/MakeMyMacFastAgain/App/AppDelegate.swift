@@ -1,12 +1,19 @@
 import AppKit
 import SwiftUI
+import os
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "app")
     private var window: NSWindow?
     private var settingsWindow: NSWindow?
+    private var statusBarController: StatusBarController?
+    let appState = AppState()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        logger.info("Application did finish launching")
         let contentView = ContentView()
+            .environment(\.appState, appState)
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
@@ -25,14 +32,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
 
+        appState.startMonitoring()
+        statusBarController = StatusBarController(appState: appState)
         setupMenu()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
     }
 
-    @MainActor private func setupMenu() {
+    func showMainWindow() {
+        if let window {
+            window.makeKeyAndOrderFront(nil)
+        }
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func setupMenu() {
         let mainMenu = NSMenu()
 
         // App menu
@@ -67,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = mainMenu
     }
 
-    @MainActor @objc private func openSettings() {
+    @objc private func openSettings() {
         if let settingsWindow = settingsWindow {
             settingsWindow.makeKeyAndOrderFront(nil)
             return

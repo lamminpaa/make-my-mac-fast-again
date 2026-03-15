@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct BrowserCleanupView: View {
+    @Environment(\.appState) private var appState
     @State private var viewModel = BrowserCleanupViewModel()
     @State private var showConfirmation = false
 
@@ -70,6 +71,7 @@ struct BrowserCleanupView: View {
             }
         }
         .task {
+            viewModel.notificationService = appState?.notificationService
             viewModel.loadBrowsers()
             await viewModel.scanSizes()
         }

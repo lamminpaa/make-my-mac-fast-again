@@ -1,8 +1,10 @@
 import Foundation
 import Darwin
+import os
 
 @MainActor
 final class NetworkMonitor {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "monitoring")
     private var previousBytesIn: UInt64 = 0
     private var previousBytesOut: UInt64 = 0
     private var previousTimestamp: Date?
@@ -12,6 +14,7 @@ final class NetworkMonitor {
 
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else {
+            logger.error("getifaddrs failed")
             return stats
         }
         defer { freeifaddrs(ifaddr) }
@@ -58,6 +61,7 @@ final class NetworkMonitor {
         previousBytesOut = totalOut
         previousTimestamp = Date()
 
+        logger.debug("Network read: in=\(stats.bytesIn) out=\(stats.bytesOut) rateIn=\(stats.rateIn, format: .fixed(precision: 0)) rateOut=\(stats.rateOut, format: .fixed(precision: 0))")
         return stats
     }
 }

@@ -1,58 +1,86 @@
 import SwiftUI
 
 struct DashboardView: View {
+    @Environment(\.appState) private var appState
     @State private var viewModel = DashboardViewModel()
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                systemInfoBar
-
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible()),
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 16) {
-                    GaugeCard(
-                        title: "CPU",
-                        value: viewModel.cpuStats.totalUsage,
-                        subtitle: "User: \(ByteFormatter.formatPercentage(viewModel.cpuStats.userPercentage))",
-                        detail: "System: \(ByteFormatter.formatPercentage(viewModel.cpuStats.systemPercentage))"
-                    )
-
-                    GaugeCard(
-                        title: "Memory",
-                        value: viewModel.memoryStats.usagePercentage,
-                        subtitle: "\(ByteFormatter.format(viewModel.memoryStats.used)) used",
-                        detail: "of \(ByteFormatter.format(viewModel.memoryStats.total))"
-                    )
-
-                    GaugeCard(
-                        title: "Disk",
-                        value: viewModel.diskStats.usagePercentage,
-                        subtitle: "\(ByteFormatter.format(viewModel.diskStats.freeSpace)) free",
-                        detail: "of \(ByteFormatter.format(viewModel.diskStats.totalSpace))"
-                    )
-
-                    NetworkCard(
-                        rateIn: viewModel.networkStats.rateIn,
-                        rateOut: viewModel.networkStats.rateOut
-                    )
+            if viewModel.hasInitialData {
+                dashboardContent
+                    .transition(.opacity)
+            } else {
+                VStack(spacing: 16) {
+                    Spacer()
+                    ProgressView()
+                        .controlSize(.large)
+                    Text("Loading...")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
                 }
-
-                sparklineSection
-
-                networkDetailCard
-
-                memoryBreakdownCard
-
-                topProcessesCard
+                .frame(maxWidth: .infinity, minHeight: 300)
+                .padding()
             }
-            .padding()
         }
-        .onAppear { viewModel.startMonitoring() }
-        .onDisappear { viewModel.stopMonitoring() }
+        .animation(.easeIn(duration: 0.3), value: viewModel.hasInitialData)
+        .onAppear {
+            if let appState {
+                viewModel.bind(to: appState)
+            }
+        }
+    }
+
+    private var dashboardContent: some View {
+        VStack(spacing: 20) {
+            HealthScoreGauge()
+
+            systemInfoBar
+
+            lastCleanupBar
+
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 16) {
+                GaugeCard(
+                    title: "CPU",
+                    value: viewModel.cpuStats.totalUsage,
+                    subtitle: "User: \(ByteFormatter.formatPercentage(viewModel.cpuStats.userPercentage))",
+                    detail: "System: \(ByteFormatter.formatPercentage(viewModel.cpuStats.systemPercentage))"
+                )
+
+                GaugeCard(
+                    title: "Memory",
+                    value: viewModel.memoryStats.usagePercentage,
+                    subtitle: "\(ByteFormatter.format(viewModel.memoryStats.used)) used",
+                    detail: "of \(ByteFormatter.format(viewModel.memoryStats.total))"
+                )
+
+                GaugeCard(
+                    title: "Disk",
+                    value: viewModel.diskStats.usagePercentage,
+                    subtitle: "\(ByteFormatter.format(viewModel.diskStats.freeSpace)) free",
+                    detail: "of \(ByteFormatter.format(viewModel.diskStats.totalSpace))"
+                )
+
+                NetworkCard(
+                    rateIn: viewModel.networkStats.rateIn,
+                    rateOut: viewModel.networkStats.rateOut
+                )
+            }
+
+            sparklineSection
+
+            networkDetailCard
+
+            memoryBreakdownCard
+
+            topProcessesCard
+        }
+        .padding()
     }
 
     private var systemInfoBar: some View {
@@ -66,6 +94,33 @@ struct DashboardView: View {
         .foregroundStyle(.secondary)
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private var lastCleanupBar: some View {
+        let settings = AppSettings.load()
+        if let date = settings.lastCleanupDate {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text("Last cleanup: \(Self.relativeDate(date))")
+                if let freed = settings.lastCleanupFreedBytes {
+                    Text("Freed \(ByteFormatter.format(freed))")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .font(.caption)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private static func relativeDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     private var networkDetailCard: some View {

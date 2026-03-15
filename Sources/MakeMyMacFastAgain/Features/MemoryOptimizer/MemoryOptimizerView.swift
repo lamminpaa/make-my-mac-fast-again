@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MemoryOptimizerView: View {
+    @Environment(\.appState) private var appState
     @State private var viewModel = MemoryOptimizerViewModel()
 
     var body: some View {
@@ -26,8 +27,11 @@ struct MemoryOptimizerView: View {
             }
             .padding()
         }
-        .onAppear { viewModel.startMonitoring() }
-        .onDisappear { viewModel.stopMonitoring() }
+        .onAppear {
+            if let appState {
+                viewModel.bind(to: appState)
+            }
+        }
     }
 
     private var headerBar: some View {
@@ -65,7 +69,7 @@ struct MemoryOptimizerView: View {
 
                 Circle()
                     .trim(from: 0, to: min(viewModel.memoryStats.usagePercentage / 100, 1.0))
-                    .stroke(gaugeColor, style: StrokeStyle(lineWidth: 16, lineCap: .round))
+                    .stroke(viewModel.memoryPressureLevel.color, style: StrokeStyle(lineWidth: 16, lineCap: .round))
                     .frame(width: 160, height: 160)
                     .rotationEffect(.degrees(-90))
                     .animation(.easeInOut(duration: 0.5), value: viewModel.memoryStats.usagePercentage)
@@ -82,13 +86,6 @@ struct MemoryOptimizerView: View {
         .frame(maxWidth: .infinity)
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var gaugeColor: Color {
-        let pct = viewModel.memoryStats.usagePercentage
-        if pct < 60 { return .green }
-        else if pct < 80 { return .yellow }
-        else { return .red }
     }
 
     private var memoryBreakdown: some View {
@@ -181,18 +178,10 @@ struct MemoryOptimizerView: View {
                 .font(.caption.bold())
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
-                .background(pressureColor.opacity(0.2), in: Capsule())
-                .foregroundStyle(pressureColor)
+                .background(viewModel.memoryPressureLevel.color.opacity(0.2), in: Capsule())
+                .foregroundStyle(viewModel.memoryPressureLevel.color)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var pressureColor: Color {
-        switch viewModel.memoryPressureLevel {
-        case .normal: return .green
-        case .warning: return .yellow
-        case .critical: return .red
-        }
     }
 
     private func lastPurgeFreedCard(freed: UInt64) -> some View {

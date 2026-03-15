@@ -40,6 +40,19 @@ enum NavigationItem: String, Hashable, CaseIterable {
         }
     }
 
+    var shortcutHint: String? {
+        switch self {
+        case .dashboard: return "1"
+        case .cacheCleaner: return "2"
+        case .browserCleanup: return "3"
+        case .largeFileFinder: return "4"
+        case .processManager: return "5"
+        case .startupItems: return "6"
+        case .memoryOptimizer: return "7"
+        case .dnsFlush: return "8"
+        }
+    }
+
     static func items(for section: NavigationSection) -> [NavigationItem] {
         NavigationItem.allCases.filter { $0.section == section }
     }

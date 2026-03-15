@@ -1,10 +1,29 @@
 import Foundation
+import os
 
 actor FileScanner {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "scanner")
     struct ScanProgress: Sendable {
         var filesScanned: Int
         var largeFilesFound: Int
         var currentPath: String
+    }
+
+    private struct CacheEntry {
+        let size: UInt64
+        let timestamp: Date
+    }
+
+    private static let cacheTTL: TimeInterval = 30
+
+    private var sizeCache: [String: CacheEntry] = [:]
+
+    func invalidateCache() {
+        sizeCache.removeAll()
+    }
+
+    func invalidateCache(for path: String) {
+        sizeCache.removeValue(forKey: path)
     }
 
     func scanForLargeFiles(
@@ -12,6 +31,7 @@ actor FileScanner {
         minSize: UInt64,
         onProgress: @Sendable @escaping (ScanProgress) -> Void
     ) async -> [LargeFile] {
+        logger.debug("Starting scan in \(directory) for files >= \(minSize) bytes")
         var results: [LargeFile] = []
         var progress = ScanProgress(filesScanned: 0, largeFilesFound: 0, currentPath: "")
 
@@ -60,11 +80,19 @@ actor FileScanner {
         progress.currentPath = "Scan complete"
         onProgress(progress)
 
+        logger.info("Scan complete: \(results.count) large files found in \(directory)")
         return results.sorted { $0.size > $1.size }
     }
 
     func calculateDirectorySize(_ path: String) async -> UInt64 {
-        _calculateDirectorySize(path)
+        if let cached = sizeCache[path],
+           Date().timeIntervalSince(cached.timestamp) < Self.cacheTTL {
+            return cached.size
+        }
+
+        let size = _calculateDirectorySize(path)
+        sizeCache[path] = CacheEntry(size: size, timestamp: Date())
+        return size
     }
 
     private nonisolated func _calculateDirectorySize(_ path: String) -> UInt64 {
@@ -80,8 +108,13 @@ actor FileScanner {
         }
 
         var totalSize: UInt64 = 0
+        var fileCount = 0
 
         for case let fileURL as URL in enumerator {
+            fileCount += 1
+            if fileCount % 100 == 0 && Task.isCancelled {
+                break
+            }
             if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
                 totalSize += UInt64(size)
             }

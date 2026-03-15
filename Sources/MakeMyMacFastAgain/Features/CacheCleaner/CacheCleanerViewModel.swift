@@ -16,6 +16,9 @@ final class CacheCleanerViewModel {
     /// File count per category name.
     var fileCount: [String: Int] = [:]
 
+    /// Set by the view to enable cleanup-complete notifications.
+    var notificationService: NotificationService?
+
     private let fileScanner = FileScanner()
     private let shell = ShellExecutor()
     private let privilegedExecutor = PrivilegedExecutor()
@@ -164,6 +167,7 @@ final class CacheCleanerViewModel {
     func cleanSelected() async {
         isCleaning = true
         var freedSpace: UInt64 = 0
+        var failedCount = 0
 
         let selectedCategories = categories.filter { $0.isSelected && $0.size > 0 }
 
@@ -178,7 +182,7 @@ final class CacheCleanerViewModel {
 
                 if category.requiresAdmin {
                     do {
-                        _ = try await privilegedExecutor.run("rm -rf '\(path)'/*")
+                        _ = try await privilegedExecutor.run(.removeCache(path: path))
                     } catch {
                         statusMessage = "Failed to clean \(category.name): \(error.localizedDescription)"
                     }
@@ -186,7 +190,11 @@ final class CacheCleanerViewModel {
                     let contents = (try? fileManager.contentsOfDirectory(atPath: path)) ?? []
                     for item in contents {
                         let itemPath = "\(path)/\(item)"
-                        try? fileManager.removeItem(atPath: itemPath)
+                        do {
+                            try fileManager.removeItem(atPath: itemPath)
+                        } catch {
+                            failedCount += 1
+                        }
                     }
                 }
 
@@ -195,8 +203,20 @@ final class CacheCleanerViewModel {
             }
         }
 
+        await fileScanner.invalidateCache()
+
         isCleaning = false
-        statusMessage = "Freed \(ByteFormatter.format(freedSpace))."
+        if failedCount > 0 {
+            statusMessage = "Freed \(ByteFormatter.format(freedSpace)). \(failedCount) items failed to clean."
+        } else {
+            statusMessage = "Freed \(ByteFormatter.format(freedSpace))."
+        }
+
+        if freedSpace > 0 {
+            var settings = AppSettings.load()
+            settings.recordCleanup(freedBytes: freedSpace)
+            notificationService?.notifyCleanupComplete(freedBytes: freedSpace)
+        }
 
         // Clear cached details since contents changed
         categoryDetails.removeAll()

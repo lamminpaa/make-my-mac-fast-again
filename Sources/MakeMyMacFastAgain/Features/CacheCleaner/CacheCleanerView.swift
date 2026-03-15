@@ -1,8 +1,9 @@
 import SwiftUI
 
 struct CacheCleanerView: View {
+    @Environment(\.appState) private var appState
     @State private var viewModel = CacheCleanerViewModel()
-    @State private var showConfirmation = false
+    @State private var showCleanPreview = false
     @State private var expandedCategories: Set<String> = []
 
     var body: some View {
@@ -29,7 +30,7 @@ struct CacheCleanerView: View {
                 }
 
                 Button("Clean Selected", role: .destructive) {
-                    showConfirmation = true
+                    showCleanPreview = true
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(viewModel.totalSelectedSize == 0 || viewModel.isCleaning)
@@ -55,16 +56,20 @@ struct CacheCleanerView: View {
             }
         }
         .task {
+            viewModel.notificationService = appState?.notificationService
             viewModel.loadCategories()
             await viewModel.scanSizes()
         }
-        .alert("Delete \(ByteFormatter.format(viewModel.totalSelectedSize)) of Cache Data?", isPresented: $showConfirmation) {
-            Button("Cancel", role: .cancel) {}
-            Button("Clean", role: .destructive) {
+        .sheet(isPresented: $showCleanPreview) {
+            CleanPreviewSheet(
+                categories: viewModel.categories.filter { $0.isSelected && $0.size > 0 },
+                totalSize: viewModel.totalSelectedSize
+            ) {
+                showCleanPreview = false
                 Task { await viewModel.cleanSelected() }
+            } onCancel: {
+                showCleanPreview = false
             }
-        } message: {
-            Text("This will permanently delete \(ByteFormatter.format(viewModel.totalSelectedSize)) of cached data. This action cannot be undone.")
         }
     }
 
@@ -187,5 +192,78 @@ struct CacheCleanerView: View {
             .padding(.leading, 48)
             .padding(.vertical, 2)
         }
+    }
+}
+
+// MARK: - Clean Preview Sheet
+
+private struct CleanPreviewSheet: View {
+    let categories: [CacheCategory]
+    let totalSize: UInt64
+    let onClean: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 8) {
+                Image(systemName: "trash")
+                    .font(.largeTitle)
+                    .foregroundStyle(.red)
+
+                Text("Before You Clean")
+                    .font(.headline)
+
+                Text("The following items will be permanently deleted:")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+
+            Divider()
+
+            List {
+                ForEach(categories) { category in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(category.name)
+                                .font(.body)
+                            Text(category.paths.first ?? "")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Spacer()
+                        Text(ByteFormatter.format(category.size))
+                            .font(.body.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .listStyle(.inset)
+            .frame(minHeight: 120, maxHeight: 250)
+
+            Divider()
+
+            HStack {
+                Text("Total to free:")
+                    .font(.headline)
+                Spacer()
+                Text(ByteFormatter.format(totalSize))
+                    .font(.headline.monospacedDigit())
+            }
+            .padding()
+
+            HStack(spacing: 12) {
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+
+                Button("Clean", role: .destructive, action: onClean)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(.bottom)
+        }
+        .frame(width: 420)
     }
 }

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 @MainActor
@@ -126,7 +127,7 @@ final class StartupItemsViewModel {
     func toggleItem(_ item: StartupItem) async {
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
 
-        let action = item.isEnabled ? "disable" : "enable"
+        let action: LaunchctlAction = item.isEnabled ? .disable : .enable
 
         do {
             let domain: String
@@ -138,19 +139,22 @@ final class StartupItemsViewModel {
                 domain = "system"
             }
 
-            let command = "launchctl \(action) \(domain)/\(item.label)"
-
             switch item.type {
             case .userAgent:
-                _ = try await shell.run(command)
+                _ = try await shell.run(
+                    executablePath: "/bin/launchctl",
+                    arguments: [action.rawValue, "\(domain)/\(item.label)"]
+                )
             case .globalAgent, .globalDaemon:
-                _ = try await privilegedExecutor.run(command)
+                _ = try await privilegedExecutor.run(
+                    .launchctl(action: action, domain: domain, label: item.label)
+                )
             }
 
             items[index].isEnabled.toggle()
             statusMessage = "\(item.name) \(items[index].isEnabled ? "enabled" : "disabled")."
         } catch {
-            statusMessage = "Failed to \(action) \(item.name): \(error.localizedDescription)"
+            statusMessage = "Failed to \(action.rawValue) \(item.name): \(error.localizedDescription)"
         }
     }
 
@@ -159,5 +163,3 @@ final class StartupItemsViewModel {
         NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: "")
     }
 }
-
-import AppKit

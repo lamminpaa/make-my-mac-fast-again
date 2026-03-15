@@ -1,8 +1,10 @@
 import Foundation
 import Darwin
+import os
 
 @MainActor
 final class CPUMonitor {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "monitoring")
     private var previousTicks: (user: UInt64, system: UInt64, idle: UInt64, nice: UInt64)?
 
     func read() -> CPUStats {
@@ -24,6 +26,7 @@ final class CPUMonitor {
         )
 
         guard result == KERN_SUCCESS, let info = cpuInfo else {
+            logger.error("host_processor_info failed with kern_return_t \(result)")
             return stats
         }
 
@@ -71,6 +74,7 @@ final class CPUMonitor {
         let size = Int(numCPUInfo) * MemoryLayout<integer_t>.stride
         vm_deallocate(mach_task_self_, vm_address_t(bitPattern: info), vm_size_t(size))
 
+        logger.debug("CPU read: user=\(stats.userPercentage, format: .fixed(precision: 1))% system=\(stats.systemPercentage, format: .fixed(precision: 1))% idle=\(stats.idlePercentage, format: .fixed(precision: 1))%")
         return stats
     }
 }
