@@ -36,7 +36,9 @@ final class MemoryMonitor {
         stats.compressed = UInt64(vmStats.compressor_page_count) * pageSize
         stats.free = UInt64(vmStats.free_count) * pageSize
 
-        stats.used = stats.active + stats.wired + stats.compressed + stats.inactive
+        // Match Activity Monitor: used = active + wired + compressed
+        // Inactive pages are cached but immediately reclaimable, not truly "used"
+        stats.used = stats.active + stats.wired + stats.compressed
 
         logger.debug("Memory read: used=\(stats.used) free=\(stats.free) total=\(stats.total)")
         return stats
