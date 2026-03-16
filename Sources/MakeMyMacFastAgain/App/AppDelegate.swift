@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "app")
     private var window: NSWindow?
     private var settingsWindow: NSWindow?
+    private var aboutWindow: NSWindow?
     private var statusBarController: StatusBarController?
     let appState = AppState()
 
@@ -55,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // App menu
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About Make My Mac Fast Again", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "About Make My Mac Fast Again", action: #selector(openAbout), keyEquivalent: "")
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(withTitle: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
         appMenu.addItem(NSMenuItem.separator())
@@ -82,6 +83,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(windowMenuItem)
 
         NSApp.mainMenu = mainMenu
+    }
+
+    @objc private func openAbout() {
+        if let aboutWindow {
+            aboutWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let aboutWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 400),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        aboutWindow.title = "About Make My Mac Fast Again"
+        aboutWindow.contentView = NSHostingView(rootView: AboutView())
+        aboutWindow.center()
+        aboutWindow.makeKeyAndOrderFront(nil)
+        aboutWindow.isReleasedWhenClosed = false
+
+        self.aboutWindow = aboutWindow
     }
 
     @objc private func openSettings() {
