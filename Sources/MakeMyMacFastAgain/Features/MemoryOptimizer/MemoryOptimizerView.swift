@@ -1,23 +1,37 @@
 import SwiftUI
 
 struct MemoryOptimizerView: View {
+    @Environment(\.appState) private var appState
     @State private var viewModel = MemoryOptimizerViewModel()
 
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
                 headerBar
+                memoryPressureIndicator
                 memoryGauge
+
+                if let freed = viewModel.lastPurgeFreed {
+                    lastPurgeFreedCard(freed: freed)
+                }
+
                 memoryBreakdown
 
                 if viewModel.showResult {
                     purgeResultCard
                 }
+
+                if !viewModel.purgeHistory.isEmpty {
+                    purgeHistorySection
+                }
             }
             .padding()
         }
-        .onAppear { viewModel.startMonitoring() }
-        .onDisappear { viewModel.stopMonitoring() }
+        .task {
+            if let appState {
+                viewModel.bind(to: appState)
+            }
+        }
     }
 
     private var headerBar: some View {
@@ -55,7 +69,7 @@ struct MemoryOptimizerView: View {
 
                 Circle()
                     .trim(from: 0, to: min(viewModel.memoryStats.usagePercentage / 100, 1.0))
-                    .stroke(gaugeColor, style: StrokeStyle(lineWidth: 16, lineCap: .round))
+                    .stroke(viewModel.memoryPressureLevel.color, style: StrokeStyle(lineWidth: 16, lineCap: .round))
                     .frame(width: 160, height: 160)
                     .rotationEffect(.degrees(-90))
                     .animation(.easeInOut(duration: 0.5), value: viewModel.memoryStats.usagePercentage)
@@ -72,13 +86,6 @@ struct MemoryOptimizerView: View {
         .frame(maxWidth: .infinity)
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var gaugeColor: Color {
-        let pct = viewModel.memoryStats.usagePercentage
-        if pct < 60 { return .green }
-        else if pct < 80 { return .yellow }
-        else { return .red }
     }
 
     private var memoryBreakdown: some View {
@@ -159,6 +166,56 @@ struct MemoryOptimizerView: View {
             }
         }
         .padding()
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var memoryPressureIndicator: some View {
+        HStack {
+            Text("Memory Pressure:")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(viewModel.memoryPressureLevel.label)
+                .font(.caption.bold())
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(viewModel.memoryPressureLevel.color.opacity(0.2), in: Capsule())
+                .foregroundStyle(viewModel.memoryPressureLevel.color)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func lastPurgeFreedCard(freed: UInt64) -> some View {
+        HStack {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            Text("Last purge freed \(ByteFormatter.format(freed))")
+                .font(.callout.bold())
+            Spacer()
+        }
+        .padding()
+        .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var purgeHistorySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Purge History")
+                .font(.headline)
+
+            ForEach(viewModel.purgeHistory) { entry in
+                HStack {
+                    Text(entry.date, style: .relative)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 120, alignment: .leading)
+                    Spacer()
+                    Text("Freed \(ByteFormatter.format(entry.freed))")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.green)
+                }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 }

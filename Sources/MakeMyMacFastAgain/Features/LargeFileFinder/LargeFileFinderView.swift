@@ -1,12 +1,49 @@
 import SwiftUI
+import QuickLook
 
 struct LargeFileFinderView: View {
     @State private var viewModel = LargeFileFinderViewModel()
     @State private var showConfirmation = false
+    @State private var previewURL: URL?
 
     var body: some View {
         VStack(spacing: 0) {
-            headerBar
+            FeatureHeader(title: "Large File Finder", subtitle: "Find and remove large files from your home directory") {
+                Picker("Min size:", selection: $viewModel.selectedMinSize) {
+                    ForEach(LargeFileFinderViewModel.MinFileSize.allCases, id: \.self) { size in
+                        Text(size.rawValue).tag(size)
+                    }
+                }
+                .frame(width: 180)
+
+                if viewModel.isScanning {
+                    ProgressView()
+                        .controlSize(.small)
+
+                    Button("Cancel") {
+                        viewModel.cancelScan()
+                    }
+                } else {
+                    Button("Scan") {
+                        Task { await viewModel.scan() }
+                    }
+                }
+
+                if !viewModel.files.isEmpty {
+                    Button("Select All") {
+                        viewModel.selectedFileIDs = Set(viewModel.files.map(\.id))
+                    }
+                    Button("Select None") {
+                        viewModel.selectedFileIDs = []
+                    }
+                }
+
+                Button("Move to Trash", role: .destructive) {
+                    showConfirmation = true
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(viewModel.selectedFileIDs.isEmpty)
+            }
 
             if viewModel.files.isEmpty && !viewModel.isScanning {
                 ContentUnavailableView(
@@ -14,50 +51,85 @@ struct LargeFileFinderView: View {
                     systemImage: "doc.text.magnifyingglass",
                     description: Text("Click Scan to search for large files in your home directory.")
                 )
+                .frame(maxHeight: .infinity)
+            } else if viewModel.files.isEmpty && viewModel.isScanning {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .controlSize(.large)
+                    Text("Scanning \(viewModel.filesScanned) files...")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxHeight: .infinity)
             } else {
-                Table(viewModel.files, selection: $viewModel.selectedFileIDs) {
-                    TableColumn("Name") { file in
-                        Text(file.name)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .width(min: 200)
+                VStack(spacing: 0) {
+                    fileTypeBreakdownSummary
 
-                    TableColumn("Size") { file in
-                        Text(ByteFormatter.format(file.size))
-                            .monospacedDigit()
-                    }
-                    .width(80)
-
-                    TableColumn("Path") { file in
-                        Text(file.path)
-                            .lineLimit(1)
-                            .truncationMode(.head)
-                            .foregroundStyle(.secondary)
-                            .font(.caption)
-                    }
-                    .width(min: 200)
-
-                    TableColumn("Modified") { file in
-                        Text(file.modifiedDate, style: .date)
-                            .foregroundStyle(.secondary)
-                    }
-                    .width(100)
-
-                    TableColumn("") { file in
-                        Button("Reveal") {
-                            viewModel.revealInFinder(file)
+                    Table(viewModel.files, selection: $viewModel.selectedFileIDs) {
+                        TableColumn("Name") { file in
+                            Text(file.name)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
                         }
-                        .buttonStyle(.borderless)
-                        .controlSize(.small)
+                        .width(min: 200)
+
+                        TableColumn("Size") { file in
+                            Text(ByteFormatter.format(file.size))
+                                .monospacedDigit()
+                        }
+                        .width(80)
+
+                        TableColumn("Path") { file in
+                            Text(file.path)
+                                .lineLimit(1)
+                                .truncationMode(.head)
+                                .foregroundStyle(.secondary)
+                                .font(.caption)
+                        }
+                        .width(min: 200)
+
+                        TableColumn("Modified") { file in
+                            Text(file.modifiedDate, style: .date)
+                                .foregroundStyle(.secondary)
+                        }
+                        .width(100)
+
+                        TableColumn("") { file in
+                            Button {
+                                previewURL = URL(fileURLWithPath: file.path)
+                            } label: {
+                                Image(systemName: "eye")
+                            }
+                            .buttonStyle(.borderless)
+                            .controlSize(.small)
+                            .help("Quick Look preview")
+                        }
+                        .width(30)
+
+                        TableColumn("") { file in
+                            Button("Reveal") {
+                                viewModel.revealInFinder(file)
+                            }
+                            .buttonStyle(.borderless)
+                            .controlSize(.small)
+                        }
+                        .width(60)
                     }
-                    .width(60)
                 }
             }
 
-            statusBar
+            StatusBar(
+                message: viewModel.isScanning ? "Scanned \(viewModel.filesScanned) files..." : viewModel.statusMessage,
+                isLoading: viewModel.isScanning
+            ) {
+                if !viewModel.selectedFileIDs.isEmpty {
+                    Text("\(viewModel.selectedFileIDs.count) selected (\(ByteFormatter.format(viewModel.totalSelectedSize)))")
+                        .font(.caption.bold())
+                }
+            }
         }
-        .alert("Confirm Move to Trash", isPresented: $showConfirmation) {
+        .quickLookPreview($previewURL)
+        .alert("Move \(viewModel.selectedFileIDs.count) Files to Trash?", isPresented: $showConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Move to Trash", role: .destructive) {
                 Task { await viewModel.moveToTrash() }
@@ -67,66 +139,51 @@ struct LargeFileFinderView: View {
         }
     }
 
-    private var headerBar: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("Large File Finder")
-                    .font(.title2.bold())
-                Text("Find and remove large files from your home directory")
-                    .font(.caption)
+    private var fileTypeBreakdownSummary: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("\(viewModel.files.count) files found")
+                    .font(.callout.bold())
+                Text("(\(ByteFormatter.format(viewModel.totalFilesSize)) total)")
+                    .font(.callout)
                     .foregroundStyle(.secondary)
+                Spacer()
             }
 
-            Spacer()
-
-            Picker("Min size:", selection: $viewModel.selectedMinSize) {
-                ForEach(LargeFileFinderViewModel.MinFileSize.allCases, id: \.self) { size in
-                    Text(size.rawValue).tag(size)
+            if !viewModel.typeBreakdown.isEmpty {
+                HStack(spacing: 12) {
+                    ForEach(viewModel.typeBreakdown) { breakdown in
+                        HStack(spacing: 4) {
+                            Image(systemName: typeIcon(breakdown.type))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(breakdown.type)
+                                    .font(.caption.bold())
+                                Text("\(breakdown.count) files, \(ByteFormatter.format(breakdown.totalSize))")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    Spacer()
                 }
-            }
-            .frame(width: 180)
-
-            if viewModel.isScanning {
-                ProgressView()
-                    .controlSize(.small)
-            }
-
-            Button("Scan") {
-                Task { await viewModel.scan() }
-            }
-            .disabled(viewModel.isScanning)
-
-            Button("Move to Trash") {
-                showConfirmation = true
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
-            .disabled(viewModel.selectedFileIDs.isEmpty)
-        }
-        .padding()
-    }
-
-    private var statusBar: some View {
-        HStack {
-            if viewModel.isScanning {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Scanned \(viewModel.filesScanned) files...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text(viewModel.statusMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            if !viewModel.selectedFileIDs.isEmpty {
-                Text("\(viewModel.selectedFileIDs.count) selected (\(ByteFormatter.format(viewModel.totalSelectedSize)))")
-                    .font(.caption.bold())
             }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(.bar)
     }
+
+    private func typeIcon(_ type: String) -> String {
+        switch type {
+        case "Videos": return "film"
+        case "Disk Images": return "opticaldiscdrive"
+        case "Archives": return "archivebox"
+        case "Applications": return "app"
+        case "Documents": return "doc.text"
+        default: return "doc"
+        }
+    }
+
 }

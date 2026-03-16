@@ -1,35 +1,78 @@
+import AppKit
 import Foundation
+import os
 
 @MainActor
 @Observable
 final class StartupItemsViewModel {
+    private let logger = Logger(subsystem: "io.tunk.make-my-mac-fast-again", category: "startup-items")
     var items: [StartupItem] = []
     var isLoading = false
     var statusMessage = ""
+    var runningStatus: [String: Bool] = [:]
+    var impactLevel: [String: String] = [:]
 
+    private weak var appState: AppState?
     private let shell = ShellExecutor()
+    private let privilegedExecutor = PrivilegedExecutor()
+
+    func bind(to appState: AppState) {
+        self.appState = appState
+    }
 
     func loadItems() async {
         isLoading = true
         items = []
+        runningStatus = [:]
+        impactLevel = [:]
 
+        let loadedLabels = await getLoadedLabels()
         let home = FileManager.default.homeDirectoryForCurrentUser.path
 
         // User LaunchAgents
         let userAgentPath = "\(home)/Library/LaunchAgents"
-        await loadPlistsFrom(path: userAgentPath, type: .userAgent)
+        loadPlistsFrom(path: userAgentPath, type: .userAgent, loadedLabels: loadedLabels)
 
         // Global LaunchAgents
-        await loadPlistsFrom(path: "/Library/LaunchAgents", type: .globalAgent)
+        loadPlistsFrom(path: "/Library/LaunchAgents", type: .globalAgent, loadedLabels: loadedLabels)
 
         // Global LaunchDaemons
-        await loadPlistsFrom(path: "/Library/LaunchDaemons", type: .globalDaemon)
+        loadPlistsFrom(path: "/Library/LaunchDaemons", type: .globalDaemon, loadedLabels: loadedLabels)
+
+        await checkRunningStatus()
 
         isLoading = false
+        logger.info("Found \(self.items.count, privacy: .public) startup items")
         statusMessage = "Found \(items.count) startup items."
+        reportToAppState()
     }
 
-    private func loadPlistsFrom(path: String, type: StartupItemType) async {
+    private func reportToAppState() {
+        let enabledItems = items.filter(\.isEnabled)
+        appState?.totalEnabledStartupItems = enabledItems.count
+        appState?.enabledHighImpactStartupItems = enabledItems.filter { item in
+            let level = impactLevel[item.label] ?? "Low"
+            return level == "High" || level == "Medium"
+        }.count
+    }
+
+    private func getLoadedLabels() async -> Set<String> {
+        do {
+            let result = try await shell.run("launchctl list")
+            var labels = Set<String>()
+            for line in result.output.split(separator: "\n").dropFirst() {
+                let parts = line.split(separator: "\t")
+                if parts.count >= 3 {
+                    labels.insert(String(parts[2]))
+                }
+            }
+            return labels
+        } catch {
+            return []
+        }
+    }
+
+    private func loadPlistsFrom(path: String, type: StartupItemType, loadedLabels: Set<String>) {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(atPath: path) else { return }
 
@@ -44,10 +87,21 @@ final class StartupItemsViewModel {
             let label = plist["Label"] as? String ?? file.replacingOccurrences(of: ".plist", with: "")
             let disabled = plist["Disabled"] as? Bool ?? false
 
-            // Check if loaded via launchctl
-            let isLoaded = await checkIfLoaded(label: label, type: type)
+            let isLoaded = loadedLabels.contains(label)
 
             let name = label.components(separatedBy: ".").last ?? label
+
+            // Determine impact level based on plist keys
+            let keepAlive = plist["KeepAlive"]
+            let runAtLoad = plist["RunAtLoad"] as? Bool ?? false
+
+            if keepAlive != nil {
+                impactLevel[label] = "High"
+            } else if runAtLoad {
+                impactLevel[label] = "Medium"
+            } else {
+                impactLevel[label] = "Low"
+            }
 
             items.append(StartupItem(
                 name: name.capitalized,
@@ -59,28 +113,39 @@ final class StartupItemsViewModel {
         }
     }
 
-    private func checkIfLoaded(label: String, type: StartupItemType) async -> Bool {
+    func checkRunningStatus() async {
         do {
-            let domain: String
-            switch type {
-            case .userAgent:
-                let uid = getuid()
-                domain = "gui/\(uid)/\(label)"
-            case .globalAgent, .globalDaemon:
-                domain = "system/\(label)"
+            let result = try await shell.run("launchctl list")
+            var pidByLabel: [String: String] = [:]
+            for line in result.output.split(separator: "\n").dropFirst() {
+                let parts = line.split(separator: "\t")
+                if parts.count >= 3 {
+                    let pidStr = String(parts[0])
+                    let label = String(parts[2])
+                    // A PID of "-" means the service is not currently running
+                    pidByLabel[label] = pidStr
+                }
             }
 
-            let result = try await shell.run("launchctl print \(domain) 2>/dev/null")
-            return result.succeeded
+            for item in items {
+                if let pidStr = pidByLabel[item.label], pidStr != "-" {
+                    runningStatus[item.label] = true
+                } else {
+                    runningStatus[item.label] = false
+                }
+            }
         } catch {
-            return false
+            // If we can't check, mark all as unknown (false)
+            for item in items {
+                runningStatus[item.label] = false
+            }
         }
     }
 
     func toggleItem(_ item: StartupItem) async {
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
 
-        let action = item.isEnabled ? "disable" : "enable"
+        let action: LaunchctlAction = item.isEnabled ? .disable : .enable
 
         do {
             let domain: String
@@ -92,11 +157,26 @@ final class StartupItemsViewModel {
                 domain = "system"
             }
 
-            _ = try await shell.run("launchctl \(action) \(domain)/\(item.label)")
+            switch item.type {
+            case .userAgent:
+                _ = try await shell.run(
+                    executablePath: "/bin/launchctl",
+                    arguments: [action.rawValue, "\(domain)/\(item.label)"]
+                )
+            case .globalAgent, .globalDaemon:
+                _ = try await privilegedExecutor.run(
+                    .launchctl(action: action, domain: domain, label: item.label)
+                )
+            }
+
             items[index].isEnabled.toggle()
-            statusMessage = "\(item.name) \(items[index].isEnabled ? "enabled" : "disabled")."
+            let status = items[index].isEnabled ? "enabled" : "disabled"
+            logger.info("\(item.label, privacy: .public) \(status, privacy: .public)")
+            statusMessage = "\(item.name) \(status)."
+            reportToAppState()
         } catch {
-            statusMessage = "Failed to \(action) \(item.name): \(error.localizedDescription)"
+            logger.warning("Failed to \(action.rawValue, privacy: .public) \(item.label, privacy: .public): \(error.localizedDescription)")
+            statusMessage = "Failed to \(action.rawValue) \(item.name): \(error.localizedDescription)"
         }
     }
 
@@ -105,5 +185,3 @@ final class StartupItemsViewModel {
         NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: "")
     }
 }
-
-import AppKit

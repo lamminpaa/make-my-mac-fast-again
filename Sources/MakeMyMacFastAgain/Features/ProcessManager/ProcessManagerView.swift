@@ -1,13 +1,62 @@
+import AppKit
 import SwiftUI
 
 struct ProcessManagerView: View {
+    @Environment(\.appState) private var appState
     @State private var viewModel = ProcessManagerViewModel()
     @State private var processToKill: AppProcessInfo?
     @State private var showKillConfirmation = false
 
     var body: some View {
         VStack(spacing: 0) {
-            headerBar
+            FeatureHeader(title: "Process Manager", subtitle: "View and manage running processes") {
+                Button("Kill Selected") {
+                    if let pid = viewModel.selectedProcessID,
+                       let process = viewModel.processes.first(where: { $0.pid == pid }),
+                       !process.isProtected {
+                        if AppSettings.load().confirmBeforeKillProcess {
+                            processToKill = process
+                            showKillConfirmation = true
+                        } else {
+                            Task { await viewModel.killProcess(process) }
+                        }
+                    }
+                }
+                .disabled(viewModel.selectedProcessID == nil || {
+                    guard let pid = viewModel.selectedProcessID else { return true }
+                    return viewModel.processes.first(where: { $0.pid == pid })?.isProtected == true
+                }())
+
+                Button("Refresh") {
+                    viewModel.refresh()
+                }
+            }
+
+            HStack(spacing: 12) {
+                Picker("Filter", selection: $viewModel.selectedFilter) {
+                    ForEach(ProcessManagerViewModel.ProcessFilter.allCases, id: \.self) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 280)
+
+                TextField("Search...", text: $viewModel.searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 200)
+
+                Spacer()
+
+                Picker("Sort by:", selection: $viewModel.sortOrder) {
+                    ForEach(ProcessManagerViewModel.SortOrder.allCases, id: \.self) { order in
+                        Text(order.rawValue).tag(order)
+                    }
+                }
+                .frame(width: 150)
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 8)
 
             Table(viewModel.filteredProcesses, selection: $viewModel.selectedProcessID) {
                 TableColumn("PID") { process in
@@ -36,6 +85,13 @@ struct ProcessManagerView: View {
                 }
                 .width(80)
 
+                TableColumn("CPU %") { process in
+                    Text(process.cpuPercentage == 0 ? "-" : String(format: "%.1f%%", process.cpuPercentage))
+                        .monospacedDigit()
+                        .foregroundStyle(process.cpuPercentage == 0 ? .tertiary : .primary)
+                }
+                .width(60)
+
                 TableColumn("Status") { process in
                     Text(process.status)
                         .foregroundStyle(.secondary)
@@ -43,23 +99,51 @@ struct ProcessManagerView: View {
                 }
                 .width(70)
 
-                TableColumn("") { process in
-                    Button("Kill") {
-                        processToKill = process
-                        showKillConfirmation = true
+            }
+            .contextMenu(forSelectionType: AppProcessInfo.ID.self) { pids in
+                if let pid = pids.first,
+                   let process = viewModel.processes.first(where: { $0.pid == pid }) {
+                    Button("Kill (SIGTERM)") {
+                        if AppSettings.load().confirmBeforeKillProcess {
+                            processToKill = process
+                            showKillConfirmation = true
+                        } else {
+                            Task { await viewModel.killProcess(process) }
+                        }
                     }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.red)
-                    .controlSize(.small)
+                    .disabled(process.isProtected)
+
+                    Button("Force Kill (SIGKILL)") {
+                        if AppSettings.load().confirmBeforeKillProcess {
+                            processToKill = process
+                            showKillConfirmation = true
+                        } else {
+                            Task { await viewModel.forceKillProcess(process) }
+                        }
+                    }
+                    .disabled(process.isProtected)
+
+                    Divider()
+                    Button("Reveal in Activity Monitor") {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Activity Monitor.app"))
+                    }
                 }
-                .width(40)
+            } primaryAction: { pids in
+                // Double-click: no-op
             }
 
-            statusBar
+            StatusBar(message: viewModel.statusMessage, isLoading: false) {
+                EmptyView()
+            }
         }
-        .onAppear { viewModel.startMonitoring() }
+        .task {
+            if let appState {
+                viewModel.bind(to: appState)
+            }
+            viewModel.startMonitoring()
+        }
         .onDisappear { viewModel.stopMonitoring() }
-        .alert("Kill Process", isPresented: $showKillConfirmation) {
+        .alert("Kill \(processToKill?.name ?? "Process")?", isPresented: $showKillConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Kill (SIGTERM)") {
                 if let process = processToKill {
@@ -78,45 +162,4 @@ struct ProcessManagerView: View {
         }
     }
 
-    private var headerBar: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("Process Manager")
-                    .font(.title2.bold())
-                Text("View and manage running processes")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            TextField("Search...", text: $viewModel.searchText)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 200)
-
-            Picker("Sort by:", selection: $viewModel.sortOrder) {
-                ForEach(ProcessManagerViewModel.SortOrder.allCases, id: \.self) { order in
-                    Text(order.rawValue).tag(order)
-                }
-            }
-            .frame(width: 150)
-
-            Button("Refresh") {
-                viewModel.refresh()
-            }
-        }
-        .padding()
-    }
-
-    private var statusBar: some View {
-        HStack {
-            Text(viewModel.statusMessage)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(.bar)
-    }
 }

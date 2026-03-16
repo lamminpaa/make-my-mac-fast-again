@@ -1,11 +1,22 @@
 import SwiftUI
 
 struct StartupItemsView: View {
+    @Environment(\.appState) private var appState
     @State private var viewModel = StartupItemsViewModel()
 
     var body: some View {
         VStack(spacing: 0) {
-            headerBar
+            FeatureHeader(title: "Startup Items", subtitle: "Manage LaunchAgents and LaunchDaemons") {
+                if viewModel.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                Button("Reload") {
+                    Task { await viewModel.loadItems() }
+                }
+                .disabled(viewModel.isLoading)
+            }
 
             if viewModel.items.isEmpty && !viewModel.isLoading {
                 ContentUnavailableView(
@@ -26,45 +37,37 @@ struct StartupItemsView: View {
                         }
                     }
                 }
+                .listStyle(.inset(alternatesRowBackgrounds: true))
             }
 
-            statusBar
+            StatusBar(message: viewModel.statusMessage, isLoading: false) {
+                Text("\(viewModel.items.count) items")
+                    .font(.caption.bold())
+            }
         }
         .task {
+            if let appState {
+                viewModel.bind(to: appState)
+            }
             await viewModel.loadItems()
         }
     }
 
-    private var headerBar: some View {
-        HStack {
-            VStack(alignment: .leading) {
-                Text("Startup Items")
-                    .font(.title2.bold())
-                Text("Manage LaunchAgents and LaunchDaemons")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            if viewModel.isLoading {
-                ProgressView()
-                    .controlSize(.small)
-            }
-
-            Button("Reload") {
-                Task { await viewModel.loadItems() }
-            }
-            .disabled(viewModel.isLoading)
-        }
-        .padding()
-    }
-
     private func startupRow(_ item: StartupItem) -> some View {
         HStack {
+            // Running status indicator
+            Circle()
+                .fill(viewModel.runningStatus[item.label] == true ? Color.green : Color.gray)
+                .frame(width: 8, height: 8)
+                .help(viewModel.runningStatus[item.label] == true ? "Running" : "Not running")
+
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.name)
-                    .font(.body.bold())
+                HStack(spacing: 6) {
+                    Text(item.name)
+                        .font(.body.bold())
+
+                    impactBadge(for: item.label)
+                }
                 Text(item.label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -90,18 +93,25 @@ struct StartupItemsView: View {
         .padding(.vertical, 2)
     }
 
-    private var statusBar: some View {
-        HStack {
-            Text(viewModel.statusMessage)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text("\(viewModel.items.count) items")
-                .font(.caption.bold())
+    @ViewBuilder
+    private func impactBadge(for label: String) -> some View {
+        if let impact = viewModel.impactLevel[label] {
+            Text(impact)
+                .font(.caption2.bold())
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(impactColor(impact).opacity(0.15))
+                .foregroundStyle(impactColor(impact))
+                .clipShape(Capsule())
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(.bar)
+    }
+
+    private func impactColor(_ impact: String) -> Color {
+        switch impact {
+        case "High": return .red
+        case "Medium": return .orange
+        default: return .green
+        }
     }
 }
 

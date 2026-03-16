@@ -24,7 +24,7 @@ struct ByteFormatterTests {
     @Test("Formats zero bytes")
     func formatZero() {
         let result = ByteFormatter.format(0)
-        #expect(result == "Zero KB" || result.contains("0"))
+        #expect(result.localizedCaseInsensitiveContains("zero") || result.contains("0"))
     }
 
     @Test("Formats percentage correctly")

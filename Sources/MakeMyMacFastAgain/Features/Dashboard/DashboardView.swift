@@ -1,56 +1,86 @@
 import SwiftUI
 
 struct DashboardView: View {
+    @Environment(\.appState) private var appState
     @State private var viewModel = DashboardViewModel()
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                systemInfoBar
-
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible()),
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 16) {
-                    GaugeCard(
-                        title: "CPU",
-                        value: viewModel.cpuStats.totalUsage,
-                        subtitle: "User: \(ByteFormatter.formatPercentage(viewModel.cpuStats.userPercentage))",
-                        detail: "System: \(ByteFormatter.formatPercentage(viewModel.cpuStats.systemPercentage))"
-                    )
-
-                    GaugeCard(
-                        title: "Memory",
-                        value: viewModel.memoryStats.usagePercentage,
-                        subtitle: "\(ByteFormatter.format(viewModel.memoryStats.used)) used",
-                        detail: "of \(ByteFormatter.format(viewModel.memoryStats.total))"
-                    )
-
-                    GaugeCard(
-                        title: "Disk",
-                        value: viewModel.diskStats.usagePercentage,
-                        subtitle: "\(ByteFormatter.format(viewModel.diskStats.freeSpace)) free",
-                        detail: "of \(ByteFormatter.format(viewModel.diskStats.totalSpace))"
-                    )
-
-                    GaugeCard(
-                        title: "Network",
-                        value: 0,
-                        subtitle: ByteFormatter.formatRate(viewModel.networkStats.rateIn),
-                        detail: ByteFormatter.formatRate(viewModel.networkStats.rateOut)
-                    )
+            if viewModel.hasInitialData {
+                dashboardContent
+                    .transition(.opacity)
+            } else {
+                VStack(spacing: 16) {
+                    Spacer()
+                    ProgressView()
+                        .controlSize(.large)
+                    Text("Loading...")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
                 }
-
-                networkDetailCard
-
-                memoryBreakdownCard
+                .frame(maxWidth: .infinity, minHeight: 300)
+                .padding()
             }
-            .padding()
         }
-        .onAppear { viewModel.startMonitoring() }
-        .onDisappear { viewModel.stopMonitoring() }
+        .animation(.easeIn(duration: 0.3), value: viewModel.hasInitialData)
+        .task {
+            if let appState {
+                viewModel.bind(to: appState)
+            }
+        }
+    }
+
+    private var dashboardContent: some View {
+        VStack(spacing: 20) {
+            HealthScoreGauge()
+
+            systemInfoBar
+
+            lastCleanupBar
+
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 16) {
+                GaugeCard(
+                    title: "CPU",
+                    value: viewModel.cpuStats.totalUsage,
+                    subtitle: "User: \(ByteFormatter.formatPercentage(viewModel.cpuStats.userPercentage))",
+                    detail: "System: \(ByteFormatter.formatPercentage(viewModel.cpuStats.systemPercentage))"
+                )
+
+                GaugeCard(
+                    title: "Memory",
+                    value: viewModel.memoryStats.usagePercentage,
+                    subtitle: "\(ByteFormatter.format(viewModel.memoryStats.used)) used",
+                    detail: "of \(ByteFormatter.format(viewModel.memoryStats.total))"
+                )
+
+                GaugeCard(
+                    title: "Disk",
+                    value: viewModel.diskStats.usagePercentage,
+                    subtitle: "\(ByteFormatter.format(viewModel.diskStats.freeSpace)) free",
+                    detail: "of \(ByteFormatter.format(viewModel.diskStats.totalSpace))"
+                )
+
+                NetworkCard(
+                    rateIn: viewModel.networkStats.rateIn,
+                    rateOut: viewModel.networkStats.rateOut
+                )
+            }
+
+            sparklineSection
+
+            networkDetailCard
+
+            memoryBreakdownCard
+
+            topProcessesCard
+        }
+        .padding()
     }
 
     private var systemInfoBar: some View {
@@ -64,6 +94,32 @@ struct DashboardView: View {
         .foregroundStyle(.secondary)
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private var lastCleanupBar: some View {
+        if let date = viewModel.lastCleanupDate {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text("Last cleanup: \(Self.relativeDate(date))")
+                if let freed = viewModel.lastCleanupFreedBytes {
+                    Text("Freed \(ByteFormatter.format(freed))")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .font(.caption)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private static func relativeDate(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     private var networkDetailCard: some View {
@@ -114,6 +170,34 @@ struct DashboardView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
+    private var topProcessesCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Top Processes by Memory")
+                .font(.headline)
+
+            ForEach(viewModel.topProcesses) { process in
+                HStack {
+                    Text(process.name)
+                        .font(.callout)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(ByteFormatter.format(process.memoryBytes))
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if viewModel.topProcesses.isEmpty {
+                Text("Loading...")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
     @ViewBuilder
     private func memoryRow(_ label: String, _ bytes: UInt64, _ color: Color) -> some View {
         GridRow {
@@ -124,6 +208,70 @@ struct DashboardView: View {
                 .frame(width: 100, alignment: .leading)
             Text(ByteFormatter.format(bytes))
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var sparklineSection: some View {
+        HStack(spacing: 16) {
+            SparklineCard(
+                title: "CPU History (60s)",
+                samples: viewModel.cpuHistory,
+                color: .blue
+            )
+            SparklineCard(
+                title: "Memory History (60s)",
+                samples: viewModel.memoryHistory,
+                color: .orange
+            )
+        }
+    }
+}
+
+private struct SparklineCard: View {
+    let title: String
+    let samples: [Double]
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            SparklineChart(samples: samples, color: color)
+                .frame(width: 200, height: 40)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct SparklineChart: View {
+    let samples: [Double]
+    let color: Color
+
+    var body: some View {
+        Canvas { context, size in
+            guard samples.count > 1 else { return }
+            let maxSamples = 30
+            let barWidth = size.width / CGFloat(maxSamples)
+            let maxValue = max(samples.max() ?? 100, 1)
+
+            for (index, value) in samples.enumerated() {
+                let barHeight = CGFloat(value / maxValue) * size.height
+                let x = CGFloat(index) * barWidth
+                let rect = CGRect(
+                    x: x,
+                    y: size.height - barHeight,
+                    width: max(barWidth - 1, 1),
+                    height: barHeight
+                )
+                context.fill(
+                    Path(roundedRect: rect, cornerRadius: 1),
+                    with: .color(color.opacity(0.7))
+                )
+            }
         }
     }
 }

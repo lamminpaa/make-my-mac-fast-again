@@ -24,7 +24,7 @@ struct MemoryStats: Sendable {
 struct DiskStats: Sendable {
     var totalSpace: UInt64 = 0
     var freeSpace: UInt64 = 0
-    var usedSpace: UInt64 { totalSpace - freeSpace }
+    var usedSpace: UInt64 { totalSpace > freeSpace ? totalSpace - freeSpace : 0 }
     var usagePercentage: Double {
         guard totalSpace > 0 else { return 0 }
         return Double(usedSpace) / Double(totalSpace) * 100
@@ -44,8 +44,10 @@ struct AppProcessInfo: Identifiable, Sendable {
     let name: String
     let user: String
     var cpuUsage: Double
+    var cpuPercentage: Double = 0
     var memoryBytes: UInt64
     var status: String
+    var isProtected: Bool = false
 }
 
 struct CacheCategory: Identifiable, Sendable {
@@ -80,6 +82,14 @@ enum StartupItemType: String, Sendable {
     case userAgent = "User Agent"
     case globalAgent = "Global Agent"
     case globalDaemon = "Global Daemon"
+}
+
+struct HealthScoreBreakdown: Sendable {
+    let diskScore: Double
+    let memoryScore: Double
+    let startupScore: Double
+    let cacheScore: Double
+    let zombieScore: Double
 }
 
 struct LargeFile: Identifiable, Hashable, Sendable {
