@@ -44,7 +44,7 @@ test:
 clean:
 	swift package clean
 	rm -rf $(BUNDLE_DIR)
-	rm -f *.dmg
+	rm -f $(APP_NAME)-*.dmg
 
 bundle: release
 	@echo "Creating app bundle..."
