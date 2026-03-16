@@ -127,6 +127,30 @@ struct NavigationItemTests {
     }
 }
 
+@Suite("AppVersion Tests")
+struct AppVersionTests {
+    @Test("Version string is non-empty")
+    func versionIsNonEmpty() {
+        #expect(!AppVersion.version.isEmpty)
+    }
+
+    @Test("Build string is non-empty")
+    func buildIsNonEmpty() {
+        #expect(!AppVersion.build.isEmpty)
+    }
+
+    @Test("Full version contains version number")
+    func fullVersionContainsVersion() {
+        #expect(AppVersion.fullVersion.contains(AppVersion.version))
+    }
+
+    @Test("Short version contains version and build")
+    func shortVersionFormat() {
+        #expect(AppVersion.shortVersion.contains(AppVersion.version))
+        #expect(AppVersion.shortVersion.contains(AppVersion.build))
+    }
+}
+
 @Suite("ProcessService Tests")
 struct ProcessServiceTests {
     @Test("Lists processes")
