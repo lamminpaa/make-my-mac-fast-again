@@ -7,6 +7,8 @@ struct AppSettings: Codable, Sendable {
     var confirmBeforeKillProcess: Bool = true
     var lastCleanupDate: Date?
     var lastCleanupFreedBytes: UInt64?
+    var hasCompletedOnboarding: Bool = false
+    var onboardingCompletedVersion: String?
 
     private static let key = "AppSettings"
 

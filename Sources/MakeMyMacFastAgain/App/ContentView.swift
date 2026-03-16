@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var selectedItem: NavigationItem? = .dashboard
+    @State private var showOnboarding = !AppSettings.load().hasCompletedOnboarding
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,6 +19,9 @@ struct ContentView: View {
             ScreenshotController.shared.onSelectItem = { item in
                 selectedItem = item
             }
+        }
+        .sheet(isPresented: $showOnboarding) {
+            OnboardingView(isPresented: $showOnboarding)
         }
         .background {
             navigationShortcuts
