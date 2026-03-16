@@ -174,6 +174,8 @@ struct AppSettingsTests {
         #expect(settings.processRefreshInterval == 3.0)
         #expect(settings.confirmBeforeCleanup == true)
         #expect(settings.confirmBeforeKillProcess == true)
+        #expect(settings.hasCompletedOnboarding == false)
+        #expect(settings.onboardingCompletedVersion == nil)
     }
 
     @Test("Save and load roundtrips correctly")
@@ -184,6 +186,8 @@ struct AppSettingsTests {
         settings.processRefreshInterval = 10.0
         settings.confirmBeforeCleanup = false
         settings.confirmBeforeKillProcess = false
+        settings.hasCompletedOnboarding = true
+        settings.onboardingCompletedVersion = "1.0.0"
         settings.save()
 
         let loaded = AppSettings.load()
@@ -191,6 +195,8 @@ struct AppSettingsTests {
         #expect(loaded.processRefreshInterval == 10.0)
         #expect(loaded.confirmBeforeCleanup == false)
         #expect(loaded.confirmBeforeKillProcess == false)
+        #expect(loaded.hasCompletedOnboarding == true)
+        #expect(loaded.onboardingCompletedVersion == "1.0.0")
 
         // Clean up
         AppSettings.clearStorage()
@@ -201,6 +207,21 @@ struct AppSettingsTests {
         let settings = AppSettings()
         #expect(settings.dashboardRefreshInterval > 0)
         #expect(settings.processRefreshInterval > 0)
+    }
+
+    @Test("Completing onboarding persists flag and version")
+    func onboardingCompletionPersists() {
+        AppSettings.clearStorage()
+        var settings = AppSettings()
+        settings.hasCompletedOnboarding = true
+        settings.onboardingCompletedVersion = "1.0.0"
+        settings.save()
+
+        let loaded = AppSettings.load()
+        #expect(loaded.hasCompletedOnboarding == true)
+        #expect(loaded.onboardingCompletedVersion == "1.0.0")
+
+        AppSettings.clearStorage()
     }
 
     @Test("Load with corrupted data returns defaults")
