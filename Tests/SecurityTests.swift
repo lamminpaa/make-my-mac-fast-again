@@ -164,7 +164,7 @@ struct ProcessManagerSafetyTests {
 
 // MARK: - AppSettings Tests
 
-@Suite("AppSettings Tests")
+@Suite("AppSettings Tests", .serialized)
 struct AppSettingsTests {
     @Test("Load with no stored data returns defaults")
     func loadReturnsDefaults() {
