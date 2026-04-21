@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import MakeMyMacFastAgain
 
@@ -168,6 +169,53 @@ struct ProcessServiceTests {
         let processes = service.listProcesses()
         let namedProcesses = processes.filter { !$0.name.isEmpty }
         #expect(!namedProcesses.isEmpty)
+    }
+}
+
+@Suite("Load Average Tests")
+struct LoadAverageTests {
+    @Test("getloadavg returns non-negative values")
+    @MainActor
+    func readLoadIsNonNegative() {
+        let monitor = CPUMonitor()
+        let stats = monitor.readLoad()
+        #expect(stats.oneMinute >= 0)
+        #expect(stats.fiveMinutes >= 0)
+        #expect(stats.fifteenMinutes >= 0)
+    }
+
+    @Test("Active processor count reflects the running host")
+    @MainActor
+    func activeProcessorCountMatchesHost() {
+        let monitor = CPUMonitor()
+        let stats = monitor.readLoad()
+        #expect(stats.activeProcessorCount == ProcessInfo.processInfo.activeProcessorCount)
+        #expect(stats.activeProcessorCount >= 1)
+    }
+
+    @Test("Load ratio defaults to zero on zero cores (guard)")
+    func loadRatioZeroCoresIsZero() {
+        var stats = LoadStats()
+        stats.oneMinute = 5.0
+        stats.activeProcessorCount = 0
+        #expect(stats.loadRatio == 0)
+    }
+
+    @Test("Load ratio scales with core count")
+    func loadRatioScalesInverselyWithCores() {
+        var stats = LoadStats()
+        stats.oneMinute = 8.0
+        stats.activeProcessorCount = 4
+        #expect(stats.loadRatio == 2.0)
+        stats.activeProcessorCount = 8
+        #expect(stats.loadRatio == 1.0)
+    }
+
+    @Test("Formatted load string uses two decimal places")
+    func formatLoadTwoDecimals() {
+        #expect(LoadCard.formatLoad(0) == "0.00")
+        #expect(LoadCard.formatLoad(1.2345) == "1.23")
+        #expect(LoadCard.formatLoad(152.47) == "152.47")
     }
 }
 

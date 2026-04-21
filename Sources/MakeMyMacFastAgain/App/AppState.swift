@@ -12,6 +12,7 @@ final class AppState {
     // MARK: - Published Stats
 
     var cpuStats = CPUStats()
+    var loadStats = LoadStats()
     var memoryStats = MemoryStats()
     var diskStats = DiskStats()
     var networkStats = NetworkStats()
@@ -159,6 +160,7 @@ final class AppState {
 
     private func refresh() {
         cpuStats = cpuMonitor.read()
+        loadStats = cpuMonitor.readLoad()
         memoryStats = memoryMonitor.read()
         diskStats = diskMonitor.read()
         networkStats = networkMonitor.read()

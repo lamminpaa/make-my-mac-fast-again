@@ -7,6 +7,25 @@ struct CPUStats: Sendable {
     var totalUsage: Double { userPercentage + systemPercentage }
 }
 
+/// Unix-style load averages from `getloadavg(3)`.
+/// Load measures the average number of runnable + uninterruptible-sleep
+/// processes over 1/5/15-minute windows. Unlike CPU%, load exposes I/O-bound
+/// stalls and queue depth — a system with load 10 on 4 cores is heavily
+/// overloaded even if every CPU shows idle time.
+struct LoadStats: Sendable {
+    var oneMinute: Double = 0
+    var fiveMinutes: Double = 0
+    var fifteenMinutes: Double = 0
+    var activeProcessorCount: Int = 1
+
+    /// 1-minute load normalized by core count.
+    /// < 0.7 = idle, 0.7-1.5 = busy, >= 1.5 = overloaded.
+    var loadRatio: Double {
+        guard activeProcessorCount > 0 else { return 0 }
+        return oneMinute / Double(activeProcessorCount)
+    }
+}
+
 struct MemoryStats: Sendable {
     var total: UInt64 = 0
     var used: UInt64 = 0
