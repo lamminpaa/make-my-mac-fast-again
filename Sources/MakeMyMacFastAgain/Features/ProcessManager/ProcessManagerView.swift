@@ -72,6 +72,15 @@ struct ProcessManagerView: View {
                 }
                 .width(min: 150)
 
+                TableColumn("Launched by") { process in
+                    Text(parentLabel(for: process))
+                        .lineLimit(1)
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                        .help(ancestorTooltip(for: process))
+                }
+                .width(min: 120, ideal: 160)
+
                 TableColumn("User") { process in
                     Text(process.user)
                         .foregroundStyle(.secondary)
@@ -132,6 +141,10 @@ struct ProcessManagerView: View {
                 // Double-click: no-op
             }
 
+            if let pid = viewModel.selectedProcessID {
+                ancestorDetailStrip(for: pid)
+            }
+
             StatusBar(message: viewModel.statusMessage, isLoading: false) {
                 EmptyView()
             }
@@ -159,6 +172,80 @@ struct ProcessManagerView: View {
             if let process = processToKill {
                 Text("Kill \(process.name) (PID \(process.pid))?\nMemory: \(ByteFormatter.format(process.memoryBytes))")
             }
+        }
+    }
+
+    private func parentLabel(for process: AppProcessInfo) -> String {
+        let ppid = process.ppid
+        if ppid <= 0 { return "—" }
+        if ppid == 1 { return "launchd (1)" }
+        if let parent = viewModel.processesByPID[ppid] {
+            return "\(parent.name) (\(ppid))"
+        }
+        return "pid \(ppid) (gone)"
+    }
+
+    private func ancestorTooltip(for process: AppProcessInfo) -> String {
+        let chain = viewModel.ancestors(of: process.pid)
+        if chain.isEmpty {
+            return process.ppid <= 1 ? "No parent process" : "Parent pid \(process.ppid) no longer exists"
+        }
+        return chain
+            .map { ancestor in
+                let command = ancestor.commandLine.isEmpty ? ancestor.name : ancestor.commandLine
+                return "\(ancestor.name) (\(ancestor.pid)) — \(command)"
+            }
+            .joined(separator: "\n")
+    }
+
+    @ViewBuilder
+    private func ancestorDetailStrip(for pid: pid_t) -> some View {
+        // If the selected process exited between refreshes, suppress the strip
+        // entirely rather than showing an orphaned ancestor list.
+        if let selected = viewModel.processesByPID[pid] {
+            let chain = Array(viewModel.ancestors(of: pid).reversed())
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Parent chain")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ForEach(Array(chain.enumerated()), id: \.element.pid) { index, ancestor in
+                    ancestorRow(ancestor, indent: index, isSelected: false)
+                }
+
+                ancestorRow(selected, indent: chain.count, isSelected: true)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(NSColor.windowBackgroundColor))
+            .overlay(Divider(), alignment: .top)
+        }
+    }
+
+    @ViewBuilder
+    private func ancestorRow(_ process: AppProcessInfo, indent: Int, isSelected: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if indent > 0 {
+                Text(String(repeating: "  ", count: indent) + "↳")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+            }
+            Text(process.name)
+                .font(.caption)
+                .fontWeight(isSelected ? .semibold : .regular)
+            Text("(\(process.pid))")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+            if !process.commandLine.isEmpty {
+                Text(process.commandLine)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 0)
         }
     }
 

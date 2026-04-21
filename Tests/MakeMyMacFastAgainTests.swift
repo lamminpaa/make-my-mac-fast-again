@@ -177,6 +177,147 @@ struct ProcessServiceTests {
     }
 }
 
+@Suite("Parent Chain Tests")
+struct ParentChainTests {
+    private func makeProcess(
+        pid: pid_t,
+        ppid: pid_t,
+        name: String,
+        commandLine: String = ""
+    ) -> AppProcessInfo {
+        AppProcessInfo(
+            id: pid,
+            pid: pid,
+            ppid: ppid,
+            name: name,
+            user: "test",
+            cpuUsage: 0,
+            memoryBytes: 0,
+            status: "R",
+            startTime: 0,
+            commandLine: commandLine
+        )
+    }
+
+    @Test("ancestors walks chain from nearest parent to root")
+    @MainActor
+    func walksChainNearestFirst() {
+        let vm = ProcessManagerViewModel()
+        vm._seedProcesses([
+            makeProcess(pid: 100, ppid: 1, name: "launchd-child"),
+            makeProcess(pid: 200, ppid: 100, name: "zsh"),
+            makeProcess(pid: 300, ppid: 200, name: "python", commandLine: "python loop.py"),
+        ])
+
+        let chain = vm.ancestors(of: 300)
+        #expect(chain.map(\.pid) == [200, 100])
+        #expect(chain.first?.name == "zsh")
+    }
+
+    @Test("ancestors stops at PID 1 (launchd)")
+    @MainActor
+    func stopsAtLaunchd() {
+        let vm = ProcessManagerViewModel()
+        vm._seedProcesses([
+            makeProcess(pid: 500, ppid: 1, name: "safari"),
+        ])
+
+        let chain = vm.ancestors(of: 500)
+        #expect(chain.isEmpty)
+    }
+
+    @Test("ancestors stops at missing parent")
+    @MainActor
+    func stopsAtMissingParent() {
+        let vm = ProcessManagerViewModel()
+        vm._seedProcesses([
+            makeProcess(pid: 42, ppid: 9999, name: "orphan"),
+        ])
+
+        let chain = vm.ancestors(of: 42)
+        #expect(chain.isEmpty)
+    }
+
+    @Test("ancestors guards against self-cycle")
+    @MainActor
+    func guardsSelfCycle() {
+        let vm = ProcessManagerViewModel()
+        vm._seedProcesses([
+            makeProcess(pid: 50, ppid: 50, name: "self-loop"),
+        ])
+
+        let chain = vm.ancestors(of: 50)
+        #expect(chain.isEmpty)
+    }
+
+    @Test("ancestors guards against A→B→A cycle")
+    @MainActor
+    func guardsMutualCycle() {
+        let vm = ProcessManagerViewModel()
+        vm._seedProcesses([
+            makeProcess(pid: 10, ppid: 20, name: "a"),
+            makeProcess(pid: 20, ppid: 10, name: "b"),
+        ])
+
+        let chain = vm.ancestors(of: 10)
+        #expect(chain.map(\.pid) == [20])
+    }
+
+    @Test("ancestors includingSelf prepends the starting process")
+    @MainActor
+    func includingSelfPrependsStart() {
+        let vm = ProcessManagerViewModel()
+        vm._seedProcesses([
+            makeProcess(pid: 100, ppid: 1, name: "parent"),
+            makeProcess(pid: 200, ppid: 100, name: "child"),
+        ])
+
+        let chain = vm.ancestors(of: 200, includingSelf: true)
+        #expect(chain.map(\.pid) == [200, 100])
+    }
+
+    @Test("parentTree sort groups children directly under their parent")
+    @MainActor
+    func parentTreeSortGroupsChildren() {
+        let vm = ProcessManagerViewModel()
+        vm._seedProcesses([
+            makeProcess(pid: 100, ppid: 1, name: "alpha-parent"),
+            makeProcess(pid: 200, ppid: 1, name: "beta-parent"),
+            makeProcess(pid: 101, ppid: 100, name: "alpha-child-one"),
+            makeProcess(pid: 102, ppid: 100, name: "alpha-child-two"),
+            makeProcess(pid: 201, ppid: 200, name: "beta-child"),
+        ])
+        vm.sortOrder = .parentTree
+        vm.selectedFilter = .allProcesses
+
+        let order = vm.filteredProcesses.map(\.pid)
+        #expect(order == [100, 101, 102, 200, 201])
+    }
+
+    @Test("parentTree sort places grandchildren under their parent subtree")
+    @MainActor
+    func parentTreeSortKeepsSubtreesContiguous() {
+        let vm = ProcessManagerViewModel()
+        vm._seedProcesses([
+            makeProcess(pid: 10, ppid: 1, name: "root-a"),
+            makeProcess(pid: 20, ppid: 10, name: "child-a"),
+            makeProcess(pid: 30, ppid: 20, name: "grandchild-a"),
+            makeProcess(pid: 40, ppid: 1, name: "root-b"),
+        ])
+        vm.sortOrder = .parentTree
+
+        let order = vm.filteredProcesses.map(\.pid)
+        let aIndex = order.firstIndex(of: 10)!
+        let aChildIndex = order.firstIndex(of: 20)!
+        let aGrandIndex = order.firstIndex(of: 30)!
+        let bIndex = order.firstIndex(of: 40)!
+
+        #expect(aIndex < aChildIndex)
+        #expect(aChildIndex < aGrandIndex)
+        #expect(aGrandIndex < bIndex)
+    }
+}
+
 @Suite("Load Average Tests")
 struct LoadAverageTests {
     @Test("getloadavg returns non-negative values")

@@ -97,11 +97,9 @@ These items come from an actual debugging session where a user's Mac had load av
 - **Effort:** M
 - **How:** Known-names allow-list: `node_modules`, `.next`, `.nuxt`, `.turbo`, `.parcel-cache`, `.svelte-kit`, `dist`, `build`, `out`, `target` (Rust/Java — need content heuristic to distinguish), `__pycache__`, `.venv`, `venv`, `vendor` (Composer/Go — heuristic), `bower_components`, `.gradle`, `DerivedData`. Extend `FileScanner` with `scanRebuildArtifacts(roots:)` actor method using the existing `nonisolated` directory-enumerator pattern. Respect `.gitignore`? No — these dirs are the point. Use `NSMetadataQuery` or iterate manually; iteration is simpler and works without Spotlight indexing (which was broken in the session).
 
-### TODO 18: Parent-Process Chain in Process Manager
-- **What:** ProcessManager shows a "Launched by" column (or expandable detail row) with full parent chain up to PID 1. Sort/filter option "Group by parent tree" collapses children under parents. Hover tooltip shows the full command line of each ancestor.
-- **Why:** In the dogfood session, `Python (66% CPU)`, `gcloud`, `kubectl`, `gke-gcloud-auth-plugin` appeared as separate rows with unrelated names. The user saw "why is Python eating CPU?" — but the answer was two levels up the tree (an orphaned `zsh -c` running `kubectl` in a loop). Parent chain turns mystery into obvious cause.
-- **Effort:** M
-- **How:** `ProcessService` already uses `sysctl KERN_PROC_PID` which returns PPID in `kinfo_proc`. Build parent map once per refresh (pid → ppid), resolve chains lazily. Render as disclosure group in `ProcessManagerView`'s List.
+### ~~TODO 18: Parent-Process Chain in Process Manager~~ DONE
+- **What:** New "Launched by" column in `ProcessManagerView` showing the immediate parent as `name (pid)`, with a `.help()` tooltip that renders the full ancestor chain (name, pid, command line per level). New `SortOrder.parentTree` case sorts rows depth-first so children sit contiguously under their parents. Selecting a row reveals an ancestor-chain strip beneath the table showing the full tree top-down with command lines.
+- **Commit:** `feat(process-manager): show parent-process chain and parent-tree sort`
 
 ### ~~TODO 19: Runaway Loop / Zombie Poller Detection (signature feature)~~ DONE
 - **What:** New "Zombie Pollers" sidebar item + compact Dashboard card. `ZombiePollerDetector` keeps a 60-sample (~2 min) sliding window of child PIDs per candidate shell parent and flags `sh`/`bash`/`zsh -c` processes whose command matches `(while|until|for) .* sleep` once ≥3 distinct children have rotated through the window. Age gate: 60 s minimum. Kill action verifies both `name` *and* `startTime` to defeat same-binary PID reuse. Per-session ignore list.
