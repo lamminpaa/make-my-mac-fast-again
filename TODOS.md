@@ -65,6 +65,69 @@
 
 ---
 
+## P2 — Real-World Insights (April 2026 dogfooding session)
+
+These items come from an actual debugging session where a user's Mac had load average 152, disk 97% full, and the root causes were invisible to existing macOS tools (Activity Monitor, About This Mac). They would have been caught by this app — *if* the app had these features. Ordered by effort ascending so quick wins ship first.
+
+### TODO 13: Add CoreSimulator Cleanup Category
+- **What:** New row in CacheCleaner: "iOS Simulators (unavailable)". Runs `xcrun simctl delete unavailable` via ShellExecutor. Optional advanced row "Reset all simulator data" using `xcrun simctl erase all`.
+- **Why:** `~/Library/Developer/CoreSimulator` regularly reaches 15–30 GB with dead runtime versions. Trivial to clean with an Apple-provided command, invisible to users who don't know about `simctl`.
+- **Effort:** XS
+- **How:** Extend `CacheCategory` enum with `.iosSimulators`, route through `ShellExecutor` (not `PrivilegedExecutor` — user-scope). Show current size from `~/Library/Developer/CoreSimulator/Devices` before cleanup.
+
+### TODO 14: Load Average on Dashboard
+- **What:** Add a "Load" metric alongside CPU: shows 1/5/15-min load averages via `getloadavg(3)`. Color thresholds relative to active CPU count (green < 0.7×cores, yellow < 1.5×cores, red ≥ 1.5×cores).
+- **Why:** Load average exposes I/O-bound stalls and process queue depth that CPU% cannot. In the dogfood session, load was 152 while CPU% looked "only" busy — the real signal was load. Currently missing from the Dashboard entirely.
+- **Effort:** XS
+- **How:** `getloadavg` is BSD libc, no entitlements needed. Add `LoadStats` struct to `SystemStats.swift`, wire into `CPUMonitor` (or a new `LoadMonitor`), extend `AppState.refresh()`, render in a new small `LoadCard` shared component.
+
+### TODO 15: Docker.raw Sparse File Recognition
+- **What:** New CacheCleaner category "Docker disk image". Detects `~/Library/Containers/com.docker.docker/Data/vms/*/data/Docker.raw`, reports both **virtual size** (`ls -l`) and **allocated size** (`du`) side-by-side. Offers two actions:
+  1. *Reclaim space* — guides user to Docker Desktop → Settings → Resources → "Clean / Purge data"
+  2. *Delete disk image* — confirms Docker daemon is stopped, then removes file (daemon recreates on next start). Large warning: destroys all containers, images, volumes.
+- **Why:** Single biggest disk hog in real session (417 GB actual / 924 GB virtual). Completely invisible to `du ~/Library/Caches`-style tools because it lives in Containers. No existing app feature catches this.
+- **Effort:** S
+- **How:** Extend FileScanner with a "known large artifacts" registry (path pattern + display name + cleanup strategy). For sparse files, use `stat -f '%z %b'` to get both allocated bytes and logical size.
+
+### TODO 16: APFS Purgeable Space + Local Snapshots Panel
+- **What:** Dashboard section showing three disk numbers instead of one: **Real free** | **Purgeable** | **Snapshots**. Action button "Delete local snapshots" calls `tmutil deletelocalsnapshots /` (requires admin). List individual snapshots via `tmutil listlocalsnapshots /`.
+- **Why:** In the dogfood session, cleaning 50 GB barely moved `df avail` because APFS held the space for local Time Machine snapshots. Users see "cleanup did nothing" and distrust the app. Separating apparent free from real free prevents this.
+- **Effort:** S
+- **How:** Parse `diskutil info /System/Volumes/Data` output for "Container Free Space" vs `df` avail. Add `PrivilegedCommand.deleteLocalSnapshots` enum case. Poll snapshot list via `tmutil listlocalsnapshots`.
+
+### TODO 17: Rebuild Artifacts Scanner (new feature view)
+- **What:** New sidebar item under Cleanup: "Rebuild Artifacts". Recursively scans `~/Documents` (and user-chosen roots) for directories matching a known allow-list of regenerable build output folders. Groups results by containing project, shows last-modified age. Move-to-Trash per-directory or bulk.
+- **Why:** Large File Finder finds big *files*; it doesn't find **thousands of small files** in regenerable directories. In the dogfood session, `~/Documents` alone was 716 GB — most of it was `node_modules`, `.next`, `DerivedData-per-project`, etc. Users typically free 50–200 GB here with zero risk (these directories rebuild on next `npm install` / `next build`).
+- **Effort:** M
+- **How:** Known-names allow-list: `node_modules`, `.next`, `.nuxt`, `.turbo`, `.parcel-cache`, `.svelte-kit`, `dist`, `build`, `out`, `target` (Rust/Java — need content heuristic to distinguish), `__pycache__`, `.venv`, `venv`, `vendor` (Composer/Go — heuristic), `bower_components`, `.gradle`, `DerivedData`. Extend `FileScanner` with `scanRebuildArtifacts(roots:)` actor method using the existing `nonisolated` directory-enumerator pattern. Respect `.gitignore`? No — these dirs are the point. Use `NSMetadataQuery` or iterate manually; iteration is simpler and works without Spotlight indexing (which was broken in the session).
+
+### TODO 18: Parent-Process Chain in Process Manager
+- **What:** ProcessManager shows a "Launched by" column (or expandable detail row) with full parent chain up to PID 1. Sort/filter option "Group by parent tree" collapses children under parents. Hover tooltip shows the full command line of each ancestor.
+- **Why:** In the dogfood session, `Python (66% CPU)`, `gcloud`, `kubectl`, `gke-gcloud-auth-plugin` appeared as separate rows with unrelated names. The user saw "why is Python eating CPU?" — but the answer was two levels up the tree (an orphaned `zsh -c` running `kubectl` in a loop). Parent chain turns mystery into obvious cause.
+- **Effort:** M
+- **How:** `ProcessService` already uses `sysctl KERN_PROC_PID` which returns PPID in `kinfo_proc`. Build parent map once per refresh (pid → ppid), resolve chains lazily. Render as disclosure group in `ProcessManagerView`'s List.
+
+### TODO 19: Runaway Loop / Zombie Poller Detection (signature feature)
+- **What:** New "Zombie Pollers" section on Dashboard and new sidebar item. Detects long-lived shell processes that are spawning short-lived child processes at high frequency. Signature to match:
+  - PPID = 1 (orphaned from exited parent)
+  - Command line matches `/bin/zsh -c` / `/bin/sh -c` / `/bin/bash -c`
+  - Command line contains polling patterns: `until`, `while`, `sleep <N>`, `do .* done`
+  - Process age > 1 hour
+  - Observed at least N rapid child spawns over M seconds (child PIDs keep changing under same parent)
+  
+  Show: parent shell PID, the loop command (de-quoted/pretty-printed), elapsed time, cumulative CPU time, child spawn rate. Actions: Kill, Reveal command, Ignore (remembered for session).
+- **Why:** This was *the* hidden cause of the slowdown. Four such loops had been running 8h–27h, collectively driving load to 152 by spawning `kubectl` + `gke-gcloud-auth-plugin` + `gcloud config config-helper` hundreds of times per minute. Activity Monitor showed only the ephemeral children, never the parent shell. Zero existing macOS tool catches this pattern. Signature feature — no competing cleanup app detects orphaned polling loops.
+- **Effort:** L
+- **How:**
+  1. `ProcessService` builds a per-tick history: for each live process, record `(pid, ppid, command, startTime)`. Keep last ~60 ticks (~2 min at 2s refresh).
+  2. Detect "frequent-spawner" parents: for each PID alive across all ticks, count distinct child PIDs that appeared+exited during the window. Threshold: ≥ 3 distinct children in 60 s.
+  3. Cross-reference with command-line pattern match (regex over `until|while` + `sleep`).
+  4. Surface as a ranked list. Include safety check: never flag own PID, `launchd`, Spotlight.
+  5. Kill action via existing `ProcessService.killProcess` with protected-PID guard reused.
+- **Notes:** Needs fast `proc_listallpids` cadence. The dogfood session had ~4 such loops; the dev should seed tests with a fixture `zsh -c 'while true; do date; sleep 2; done' &`.
+
+---
+
 ## P3 — Documentation / Minor
 
 ### ~~TODO 10: Add CLAUDE.md Architecture Documentation~~ DONE
