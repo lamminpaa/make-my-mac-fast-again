@@ -50,6 +50,21 @@ struct AppProcessInfo: Identifiable, Sendable {
     var isProtected: Bool = false
 }
 
+/// Custom cleanup command used when the default path-removal strategy does not apply
+/// (e.g. iOS simulators, which must be cleaned via `xcrun simctl delete unavailable`
+/// instead of `rm -rf` on the device directory).
+struct CacheCleanupCommand: Sendable, Equatable {
+    let executable: String
+    let arguments: [String]
+    let timeout: TimeInterval
+
+    init(executable: String, arguments: [String], timeout: TimeInterval = 60) {
+        self.executable = executable
+        self.arguments = arguments
+        self.timeout = timeout
+    }
+}
+
 struct CacheCategory: Identifiable, Sendable {
     let id = UUID()
     let name: String
@@ -58,6 +73,27 @@ struct CacheCategory: Identifiable, Sendable {
     var size: UInt64 = 0
     var isSelected: Bool = true
     let requiresAdmin: Bool
+    /// When set, cleanup runs this command instead of removing the `paths` contents.
+    /// `paths` is still used to measure size before and after.
+    let cleanupCommand: CacheCleanupCommand?
+
+    init(
+        name: String,
+        description: String,
+        paths: [String],
+        size: UInt64 = 0,
+        isSelected: Bool = true,
+        requiresAdmin: Bool,
+        cleanupCommand: CacheCleanupCommand? = nil
+    ) {
+        self.name = name
+        self.description = description
+        self.paths = paths
+        self.size = size
+        self.isSelected = isSelected
+        self.requiresAdmin = requiresAdmin
+        self.cleanupCommand = cleanupCommand
+    }
 }
 
 struct BrowserProfile: Identifiable, Sendable {

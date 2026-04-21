@@ -141,18 +141,9 @@ swift test       # or: make test
 
 ### Test Configuration Note
 
-The test target requires Command Line Tools framework search paths for the Swift Testing framework:
+Swift 6.3+ bundles the Swift Testing framework directly with the toolchain, so the test target uses the default configuration without any `unsafeFlags`. Earlier versions of this project required manual framework search paths to the Command Line Tools copy of `Testing.framework`; those flags were removed because with Swift 6.3 they caused a protocol mismatch between the compiler-generated macros (expecting `fileID:`) and the older bundled runtime (`__uncheckedFileID:`).
 
-```swift
-// In Package.swift test target:
-swiftSettings: [
-    .unsafeFlags(["-F", "/Library/Developer/CommandLineTools/Library/Developer/Frameworks"])
-],
-linkerSettings: [
-    .unsafeFlags(["-F", "/Library/Developer/CommandLineTools/Library/Developer/Frameworks",
-                  "-Xlinker", "-rpath", "-Xlinker", "/Library/Developer/CommandLineTools/Library/Developer/Frameworks"])
-]
-```
+If you downgrade to a toolchain older than Swift 6.2, you may need to reintroduce `-F` search paths pointing to a matching `Testing.framework` copy.
 
 ## Swift 6 Strict Concurrency Gotchas
 

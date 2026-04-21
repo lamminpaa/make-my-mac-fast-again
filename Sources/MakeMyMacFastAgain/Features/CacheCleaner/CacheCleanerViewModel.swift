@@ -98,6 +98,18 @@ final class CacheCleanerViewModel {
                 paths: ["\(home)/Library/Logs"],
                 isSelected: false,
                 requiresAdmin: false
+            ),
+            CacheCategory(
+                name: "iOS Simulators (unavailable)",
+                description: "Remove simulator runtimes whose OS is no longer available",
+                paths: ["\(home)/Library/Developer/CoreSimulator/Devices"],
+                isSelected: false,
+                requiresAdmin: false,
+                cleanupCommand: CacheCleanupCommand(
+                    executable: "/usr/bin/xcrun",
+                    arguments: ["simctl", "delete", "unavailable"],
+                    timeout: 120
+                )
             )
         ]
     }
@@ -197,35 +209,59 @@ final class CacheCleanerViewModel {
         for category in selectedCategories {
             statusMessage = "Cleaning \(category.name)..."
 
+            var sizeBefore: UInt64 = 0
             for path in category.paths {
-                let fileManager = FileManager.default
-                guard fileManager.fileExists(atPath: path) else { continue }
+                sizeBefore += await fileScanner.calculateDirectorySize(path)
+            }
 
-                let sizeBefore = await fileScanner.calculateDirectorySize(path)
-
-                if category.requiresAdmin {
-                    do {
-                        _ = try await privilegedExecutor.run(.removeCache(path: path))
-                    } catch {
+            if let cleanupCommand = category.cleanupCommand {
+                do {
+                    let result = try await shell.run(
+                        executablePath: cleanupCommand.executable,
+                        arguments: cleanupCommand.arguments,
+                        timeout: cleanupCommand.timeout
+                    )
+                    if !result.succeeded {
                         failedCount += 1
-                        logger.warning("Failed to clean \(category.name, privacy: .public) at \(path, privacy: .private): \(error.localizedDescription)")
+                        logger.warning("\(category.name, privacy: .public) cleanup exited \(result.exitCode): \(result.errorOutput, privacy: .private)")
                     }
-                } else {
-                    let contents = (try? fileManager.contentsOfDirectory(atPath: path)) ?? []
-                    for item in contents {
-                        let itemPath = "\(path)/\(item)"
+                } catch {
+                    failedCount += 1
+                    logger.warning("\(category.name, privacy: .public) cleanup failed: \(error.localizedDescription)")
+                }
+            } else {
+                for path in category.paths {
+                    let fileManager = FileManager.default
+                    guard fileManager.fileExists(atPath: path) else { continue }
+
+                    if category.requiresAdmin {
                         do {
-                            try fileManager.removeItem(atPath: itemPath)
+                            _ = try await privilegedExecutor.run(.removeCache(path: path))
                         } catch {
                             failedCount += 1
-                            logger.warning("Failed to remove \(itemPath, privacy: .private): \(error.localizedDescription)")
+                            logger.warning("Failed to clean \(category.name, privacy: .public) at \(path, privacy: .private): \(error.localizedDescription)")
+                        }
+                    } else {
+                        let contents = (try? fileManager.contentsOfDirectory(atPath: path)) ?? []
+                        for item in contents {
+                            let itemPath = "\(path)/\(item)"
+                            do {
+                                try fileManager.removeItem(atPath: itemPath)
+                            } catch {
+                                failedCount += 1
+                                logger.warning("Failed to remove \(itemPath, privacy: .private): \(error.localizedDescription)")
+                            }
                         }
                     }
                 }
-
-                let sizeAfter = await fileScanner.calculateDirectorySize(path)
-                freedSpace += sizeBefore > sizeAfter ? sizeBefore - sizeAfter : 0
             }
+
+            var sizeAfter: UInt64 = 0
+            for path in category.paths {
+                await fileScanner.invalidateCache(for: path)
+                sizeAfter += await fileScanner.calculateDirectorySize(path)
+            }
+            freedSpace += sizeBefore > sizeAfter ? sizeBefore - sizeAfter : 0
         }
 
         await fileScanner.invalidateCache()
