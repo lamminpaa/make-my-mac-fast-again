@@ -11,9 +11,10 @@ final class ScreenshotController {
         (.browserCleanup, "03-browser-cleanup"),
         (.largeFileFinder, "04-large-file-finder"),
         (.processManager, "05-process-manager"),
-        (.startupItems, "06-startup-items"),
-        (.memoryOptimizer, "07-memory-optimizer"),
-        (.dnsFlush, "08-dns-flush")
+        (.zombiePollers, "06-zombie-pollers"),
+        (.startupItems, "07-startup-items"),
+        (.memoryOptimizer, "08-memory-optimizer"),
+        (.dnsFlush, "09-dns-flush")
     ]
 
     var onSelectItem: ((NavigationItem) -> Void)?

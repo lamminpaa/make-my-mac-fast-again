@@ -12,6 +12,7 @@ enum NavigationItem: String, Hashable, CaseIterable {
     case browserCleanup = "Browser Cleanup"
     case largeFileFinder = "Large File Finder"
     case processManager = "Process Manager"
+    case zombiePollers = "Zombie Pollers"
     case startupItems = "Startup Items"
     case memoryOptimizer = "Memory Optimizer"
     case dnsFlush = "DNS Flush"
@@ -22,7 +23,7 @@ enum NavigationItem: String, Hashable, CaseIterable {
             return .overview
         case .cacheCleaner, .browserCleanup, .largeFileFinder:
             return .cleanup
-        case .processManager, .startupItems, .memoryOptimizer, .dnsFlush:
+        case .processManager, .zombiePollers, .startupItems, .memoryOptimizer, .dnsFlush:
             return .system
         }
     }
@@ -34,6 +35,7 @@ enum NavigationItem: String, Hashable, CaseIterable {
         case .browserCleanup: return "globe"
         case .largeFileFinder: return "doc.text.magnifyingglass"
         case .processManager: return "cpu"
+        case .zombiePollers: return "ant"
         case .startupItems: return "arrow.right.circle"
         case .memoryOptimizer: return "memorychip"
         case .dnsFlush: return "network"
@@ -47,13 +49,21 @@ enum NavigationItem: String, Hashable, CaseIterable {
         case .browserCleanup: return "3"
         case .largeFileFinder: return "4"
         case .processManager: return "5"
-        case .startupItems: return "6"
-        case .memoryOptimizer: return "7"
-        case .dnsFlush: return "8"
+        case .zombiePollers: return "6"
+        case .startupItems: return "7"
+        case .memoryOptimizer: return "8"
+        case .dnsFlush: return "9"
         }
     }
 
     static func items(for section: NavigationSection) -> [NavigationItem] {
         NavigationItem.allCases.filter { $0.section == section }
     }
+}
+
+extension Notification.Name {
+    /// Posted to request the sidebar to switch to a specific NavigationItem.
+    /// The item is carried as the notification's `object`. Used for in-app
+    /// deep links like Dashboard → Zombie Pollers.
+    static let requestNavigate = Notification.Name("io.tunk.make-my-mac-fast-again.requestNavigate")
 }

@@ -20,6 +20,7 @@ final class DashboardViewModel {
     var memoryHistory: [Double] { appState?.memoryHistory ?? [] }
     var hasInitialData: Bool { appState?.hasInitialData ?? false }
     var topProcesses: [AppProcessInfo] { appState?.topProcesses ?? [] }
+    var zombiePollers: [ZombiePoller] { appState?.zombiePollers ?? [] }
 
     /// Cached settings — loaded once on bind, refreshed after cleanup.
     var lastCleanupDate: Date?

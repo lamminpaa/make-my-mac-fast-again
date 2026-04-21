@@ -10,6 +10,9 @@ typedef struct {
     uid_t uid;
     char name[256];
     int status;
+    /// Unix epoch seconds when the process was started (kp_proc.p_starttime).
+    /// Zero if unavailable.
+    int64_t start_time_seconds;
 } CSKProcessInfo;
 
 typedef struct {
@@ -26,5 +29,12 @@ int csk_get_process_resource_usage(pid_t pid, CSKProcessResourceUsage *usage);
 
 /// Get list of all PIDs. Returns count, fills pids array up to max_count.
 int csk_get_all_pids(pid_t *pids, int max_count);
+
+/// Read the NUL-joined argv for a process via KERN_PROCARGS2.
+/// Writes up to `max_len - 1` bytes into `buf`, always NUL-terminated.
+/// Separator bytes between arguments are replaced with ASCII 0x1F (unit separator)
+/// so callers can split without losing NULs in the buffer.
+/// Returns the number of argv entries joined (>= 0) on success, or a negative errno on failure.
+int csk_get_process_args(pid_t pid, char *buf, int max_len);
 
 #endif /* CSYSTEMKIT_H */
