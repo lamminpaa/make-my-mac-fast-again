@@ -22,6 +22,14 @@ final class ProcessManagerViewModel {
     private let currentUsername = NSUserName()
     private let ownPID = getpid()
 
+    /// Lookup table rebuilt on every refresh. Used to resolve parent chains
+    /// without walking the flat `processes` array repeatedly.
+    private(set) var processesByPID: [pid_t: AppProcessInfo] = [:]
+
+    /// Maximum ancestor-chain depth before we abort the walk. Real shells sit
+    /// around 5–10 deep; the cap is purely defensive against pathological data.
+    private static let maxChainDepth = 64
+
     /// PIDs that must never be killed (kernel idle process, launchd)
     private static let protectedPIDs: Set<pid_t> = [0, 1]
 
@@ -33,6 +41,7 @@ final class ProcessManagerViewModel {
         case cpu = "CPU"
         case name = "Name"
         case pid = "PID"
+        case parentTree = "Parent tree"
     }
 
     enum ProcessFilter: String, CaseIterable, Sendable {
@@ -78,7 +87,57 @@ final class ProcessManagerViewModel {
             return filtered.sorted { $0.name.lowercased() < $1.name.lowercased() }
         case .pid:
             return filtered.sorted { $0.pid < $1.pid }
+        case .parentTree:
+            return sortedByParentTree(filtered)
         }
+    }
+
+    /// Walks ppid upward from `pid`, returning ancestors ordered nearest-first
+    /// (immediate parent, grandparent, …). Stops at PID 0/1 (kernel / launchd)
+    /// and at any unresolvable PPID. Cycle-safe via a visited set.
+    func ancestors(of pid: pid_t, includingSelf: Bool = false) -> [AppProcessInfo] {
+        var chain: [AppProcessInfo] = []
+        var visited: Set<pid_t> = [pid]
+        var cursor = pid
+
+        if includingSelf, let selfProc = processesByPID[pid] {
+            chain.append(selfProc)
+        }
+
+        for _ in 0..<Self.maxChainDepth {
+            guard let current = processesByPID[cursor] else { break }
+            let nextPID = current.ppid
+            if nextPID <= 1 { break }
+            if visited.contains(nextPID) { break }
+            visited.insert(nextPID)
+            guard let parent = processesByPID[nextPID] else { break }
+            chain.append(parent)
+            cursor = nextPID
+        }
+        return chain
+    }
+
+    /// Depth-first sort key: the full PID chain from root down to self.
+    /// Comparing these lexicographically groups children immediately under
+    /// their parent and keeps sibling ordering stable.
+    private func parentChainSortKey(for process: AppProcessInfo) -> [pid_t] {
+        var key = ancestors(of: process.pid).reversed().map(\.pid)
+        key.append(process.pid)
+        return key
+    }
+
+    private func sortedByParentTree(_ processes: [AppProcessInfo]) -> [AppProcessInfo] {
+        let keyed = processes.map { ($0, parentChainSortKey(for: $0)) }
+        let sorted = keyed.sorted { lhs, rhs in
+            let a = lhs.1
+            let b = rhs.1
+            let common = min(a.count, b.count)
+            for i in 0..<common where a[i] != b[i] {
+                return a[i] < b[i]
+            }
+            return a.count < b.count
+        }
+        return sorted.map(\.0)
     }
 
     func bind(to appState: AppState) {
@@ -129,6 +188,7 @@ final class ProcessManagerViewModel {
 
         previousCPUTimes = newCPUTimes
         processes = currentProcesses
+        processesByPID = Dictionary(uniqueKeysWithValues: currentProcesses.map { ($0.pid, $0) })
         statusMessage = "\(processes.count) processes"
     }
 
@@ -197,6 +257,14 @@ final class ProcessManagerViewModel {
         }
         return nil
     }
+
+    #if DEBUG
+    /// Seed `processes` + `processesByPID` without a live system. Test-only.
+    func _seedProcesses(_ seed: [AppProcessInfo]) {
+        processes = seed
+        processesByPID = Dictionary(uniqueKeysWithValues: seed.map { ($0.pid, $0) })
+    }
+    #endif
 
     /// Re-reads the process to guard against PID reuse race conditions.
     /// Returns a reason string if the process identity no longer matches, nil if safe to proceed.
