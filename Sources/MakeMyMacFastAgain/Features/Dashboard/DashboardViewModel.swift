@@ -9,6 +9,7 @@ final class DashboardViewModel {
     private weak var appState: AppState?
 
     var cpuStats: CPUStats { appState?.cpuStats ?? CPUStats() }
+    var loadStats: LoadStats { appState?.loadStats ?? LoadStats() }
     var memoryStats: MemoryStats { appState?.memoryStats ?? MemoryStats() }
     var diskStats: DiskStats { appState?.diskStats ?? DiskStats() }
     var networkStats: NetworkStats { appState?.networkStats ?? NetworkStats() }

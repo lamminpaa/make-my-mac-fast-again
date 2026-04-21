@@ -74,6 +74,8 @@ struct DashboardView: View {
 
             sparklineSection
 
+            LoadCard(loadStats: viewModel.loadStats)
+
             networkDetailCard
 
             memoryBreakdownCard

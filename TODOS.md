@@ -69,17 +69,13 @@
 
 These items come from an actual debugging session where a user's Mac had load average 152, disk 97% full, and the root causes were invisible to existing macOS tools (Activity Monitor, About This Mac). They would have been caught by this app — *if* the app had these features. Ordered by effort ascending so quick wins ship first.
 
-### TODO 13: Add CoreSimulator Cleanup Category
-- **What:** New row in CacheCleaner: "iOS Simulators (unavailable)". Runs `xcrun simctl delete unavailable` via ShellExecutor. Optional advanced row "Reset all simulator data" using `xcrun simctl erase all`.
-- **Why:** `~/Library/Developer/CoreSimulator` regularly reaches 15–30 GB with dead runtime versions. Trivial to clean with an Apple-provided command, invisible to users who don't know about `simctl`.
-- **Effort:** XS
-- **How:** Extend `CacheCategory` enum with `.iosSimulators`, route through `ShellExecutor` (not `PrivilegedExecutor` — user-scope). Show current size from `~/Library/Developer/CoreSimulator/Devices` before cleanup.
+### ~~TODO 13: Add CoreSimulator Cleanup Category~~ DONE
+- **What:** New "iOS Simulators (unavailable)" category in CacheCleaner running `xcrun simctl delete unavailable` via ShellExecutor. Extended `CacheCategory` with an optional `cleanupCommand` strategy so future shell-based cleanups slot in without special-casing.
+- **Commit:** `feat(cache): add iOS Simulator cleanup via xcrun simctl delete unavailable`
 
-### TODO 14: Load Average on Dashboard
-- **What:** Add a "Load" metric alongside CPU: shows 1/5/15-min load averages via `getloadavg(3)`. Color thresholds relative to active CPU count (green < 0.7×cores, yellow < 1.5×cores, red ≥ 1.5×cores).
-- **Why:** Load average exposes I/O-bound stalls and process queue depth that CPU% cannot. In the dogfood session, load was 152 while CPU% looked "only" busy — the real signal was load. Currently missing from the Dashboard entirely.
-- **Effort:** XS
-- **How:** `getloadavg` is BSD libc, no entitlements needed. Add `LoadStats` struct to `SystemStats.swift`, wire into `CPUMonitor` (or a new `LoadMonitor`), extend `AppState.refresh()`, render in a new small `LoadCard` shared component.
+### ~~TODO 14: Load Average on Dashboard~~ DONE
+- **What:** `LoadStats` struct + `CPUMonitor.readLoad()` via `getloadavg(3)`, surfaced through AppState and a new `LoadCard` rendered on the Dashboard between sparklines and network detail. Color thresholds relative to active CPU count (green < 0.7×cores, yellow < 1.5×cores, red ≥ 1.5×cores).
+- **Commit:** `feat(dashboard): surface Unix load averages via getloadavg`
 
 ### TODO 15: Docker.raw Sparse File Recognition
 - **What:** New CacheCleaner category "Docker disk image". Detects `~/Library/Containers/com.docker.docker/Data/vms/*/data/Docker.raw`, reports both **virtual size** (`ls -l`) and **allocated size** (`du`) side-by-side. Offers two actions:

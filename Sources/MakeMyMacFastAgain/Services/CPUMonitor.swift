@@ -73,4 +73,23 @@ final class CPUMonitor {
         logger.debug("CPU read: user=\(stats.userPercentage, format: .fixed(precision: 1))% system=\(stats.systemPercentage, format: .fixed(precision: 1))% idle=\(stats.idlePercentage, format: .fixed(precision: 1))%")
         return stats
     }
+
+    /// Reads 1/5/15-minute load averages via BSD `getloadavg(3)`.
+    /// Returns zeros on failure (no entitlements or special permissions needed).
+    func readLoad() -> LoadStats {
+        var stats = LoadStats()
+        stats.activeProcessorCount = Foundation.ProcessInfo.processInfo.activeProcessorCount
+
+        var values = [Double](repeating: 0, count: 3)
+        let count = getloadavg(&values, Int32(values.count))
+
+        if count >= 1 { stats.oneMinute = values[0] }
+        if count >= 2 { stats.fiveMinutes = values[1] }
+        if count >= 3 { stats.fifteenMinutes = values[2] }
+
+        if count < 0 {
+            logger.error("getloadavg failed (returned \(count))")
+        }
+        return stats
+    }
 }
