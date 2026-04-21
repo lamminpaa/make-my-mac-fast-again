@@ -26,6 +26,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.minSize = NSSize(width: 800, height: 500)
         window.contentView = NSHostingView(rootView: contentView)
         window.center()
+        // Without this, AppKit releases the NSWindow when the user closes it;
+        // the stored `self.window` then points to freed memory and
+        // `showMainWindow()` (called from the menubar popover) segfaults on
+        // the next open. Settings and About windows already do this.
+        window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil)
 
         self.window = window
