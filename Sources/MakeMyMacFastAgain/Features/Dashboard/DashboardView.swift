@@ -76,6 +76,15 @@ struct DashboardView: View {
 
             LoadCard(loadStats: viewModel.loadStats)
 
+            if !viewModel.zombiePollers.isEmpty {
+                ZombiePollerCard(pollers: viewModel.zombiePollers) {
+                    NotificationCenter.default.post(
+                        name: .requestNavigate,
+                        object: NavigationItem.zombiePollers
+                    )
+                }
+            }
+
             networkDetailCard
 
             memoryBreakdownCard

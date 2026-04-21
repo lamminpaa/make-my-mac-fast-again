@@ -20,6 +20,11 @@ struct ContentView: View {
                 selectedItem = item
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .requestNavigate)) { notification in
+            if let item = notification.object as? NavigationItem {
+                selectedItem = item
+            }
+        }
         .sheet(isPresented: $showOnboarding) {
             OnboardingView(isPresented: $showOnboarding)
         }
@@ -63,6 +68,8 @@ struct ContentView: View {
             LargeFileFinderView()
         case .processManager:
             ProcessManagerView()
+        case .zombiePollers:
+            ZombiePollersView()
         case .startupItems:
             StartupItemsView()
         case .memoryOptimizer:
@@ -92,12 +99,14 @@ struct ContentView: View {
                 .keyboardShortcut("4", modifiers: .command)
             Button("") { selectedItem = .processManager }
                 .keyboardShortcut("5", modifiers: .command)
-            Button("") { selectedItem = .startupItems }
+            Button("") { selectedItem = .zombiePollers }
                 .keyboardShortcut("6", modifiers: .command)
-            Button("") { selectedItem = .memoryOptimizer }
+            Button("") { selectedItem = .startupItems }
                 .keyboardShortcut("7", modifiers: .command)
-            Button("") { selectedItem = .dnsFlush }
+            Button("") { selectedItem = .memoryOptimizer }
                 .keyboardShortcut("8", modifiers: .command)
+            Button("") { selectedItem = .dnsFlush }
+                .keyboardShortcut("9", modifiers: .command)
         }
         .frame(width: 0, height: 0)
         .opacity(0)

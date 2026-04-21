@@ -60,6 +60,7 @@ struct NetworkStats: Sendable {
 struct AppProcessInfo: Identifiable, Sendable {
     let id: pid_t
     let pid: pid_t
+    let ppid: pid_t
     let name: String
     let user: String
     var cpuUsage: Double
@@ -67,6 +68,63 @@ struct AppProcessInfo: Identifiable, Sendable {
     var memoryBytes: UInt64
     var status: String
     var isProtected: Bool = false
+    /// Unix epoch start time (seconds). Zero if unavailable.
+    let startTime: Int64
+    /// Full command line joined with spaces (from KERN_PROCARGS2). Empty if
+    /// argv is unreadable (some system/root-owned processes restrict access).
+    let commandLine: String
+
+    init(
+        id: pid_t,
+        pid: pid_t,
+        ppid: pid_t = 0,
+        name: String,
+        user: String,
+        cpuUsage: Double,
+        cpuPercentage: Double = 0,
+        memoryBytes: UInt64,
+        status: String,
+        isProtected: Bool = false,
+        startTime: Int64 = 0,
+        commandLine: String = ""
+    ) {
+        self.id = id
+        self.pid = pid
+        self.ppid = ppid
+        self.name = name
+        self.user = user
+        self.cpuUsage = cpuUsage
+        self.cpuPercentage = cpuPercentage
+        self.memoryBytes = memoryBytes
+        self.status = status
+        self.isProtected = isProtected
+        self.startTime = startTime
+        self.commandLine = commandLine
+    }
+}
+
+/// Represents a runaway shell loop: an orphaned `sh -c` / `zsh -c` / `bash -c`
+/// process that keeps spawning short-lived children. Invisible in Activity Monitor
+/// because only the ephemeral children show up there.
+struct ZombiePoller: Identifiable, Sendable, Hashable {
+    let id: pid_t
+    let pid: pid_t
+    let ppid: pid_t
+    let shell: String
+    let command: String
+    let startTime: Int64
+    let uptimeSeconds: Double
+    let cpuTimeNanos: Double
+    let recentChildSpawns: Int
+    let recentChildSamples: Int
+
+    /// Observed child spawns per minute over the detector's sliding window.
+    var spawnsPerMinute: Double {
+        guard recentChildSamples > 0 else { return 0 }
+        let windowSeconds = Double(recentChildSamples) * ZombiePollerDetector.sampleIntervalSeconds
+        guard windowSeconds > 0 else { return 0 }
+        return Double(recentChildSpawns) / windowSeconds * 60.0
+    }
 }
 
 /// Custom cleanup command used when the default path-removal strategy does not apply

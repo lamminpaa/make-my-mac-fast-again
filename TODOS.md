@@ -103,24 +103,9 @@ These items come from an actual debugging session where a user's Mac had load av
 - **Effort:** M
 - **How:** `ProcessService` already uses `sysctl KERN_PROC_PID` which returns PPID in `kinfo_proc`. Build parent map once per refresh (pid → ppid), resolve chains lazily. Render as disclosure group in `ProcessManagerView`'s List.
 
-### TODO 19: Runaway Loop / Zombie Poller Detection (signature feature)
-- **What:** New "Zombie Pollers" section on Dashboard and new sidebar item. Detects long-lived shell processes that are spawning short-lived child processes at high frequency. Signature to match:
-  - PPID = 1 (orphaned from exited parent)
-  - Command line matches `/bin/zsh -c` / `/bin/sh -c` / `/bin/bash -c`
-  - Command line contains polling patterns: `until`, `while`, `sleep <N>`, `do .* done`
-  - Process age > 1 hour
-  - Observed at least N rapid child spawns over M seconds (child PIDs keep changing under same parent)
-  
-  Show: parent shell PID, the loop command (de-quoted/pretty-printed), elapsed time, cumulative CPU time, child spawn rate. Actions: Kill, Reveal command, Ignore (remembered for session).
-- **Why:** This was *the* hidden cause of the slowdown. Four such loops had been running 8h–27h, collectively driving load to 152 by spawning `kubectl` + `gke-gcloud-auth-plugin` + `gcloud config config-helper` hundreds of times per minute. Activity Monitor showed only the ephemeral children, never the parent shell. Zero existing macOS tool catches this pattern. Signature feature — no competing cleanup app detects orphaned polling loops.
-- **Effort:** L
-- **How:**
-  1. `ProcessService` builds a per-tick history: for each live process, record `(pid, ppid, command, startTime)`. Keep last ~60 ticks (~2 min at 2s refresh).
-  2. Detect "frequent-spawner" parents: for each PID alive across all ticks, count distinct child PIDs that appeared+exited during the window. Threshold: ≥ 3 distinct children in 60 s.
-  3. Cross-reference with command-line pattern match (regex over `until|while` + `sleep`).
-  4. Surface as a ranked list. Include safety check: never flag own PID, `launchd`, Spotlight.
-  5. Kill action via existing `ProcessService.killProcess` with protected-PID guard reused.
-- **Notes:** Needs fast `proc_listallpids` cadence. The dogfood session had ~4 such loops; the dev should seed tests with a fixture `zsh -c 'while true; do date; sleep 2; done' &`.
+### ~~TODO 19: Runaway Loop / Zombie Poller Detection (signature feature)~~ DONE
+- **What:** New "Zombie Pollers" sidebar item + compact Dashboard card. `ZombiePollerDetector` keeps a 60-sample (~2 min) sliding window of child PIDs per candidate shell parent and flags `sh`/`bash`/`zsh -c` processes whose command matches `(while|until|for) .* sleep` once ≥3 distinct children have rotated through the window. Age gate: 60 s minimum. Kill action verifies both `name` *and* `startTime` to defeat same-binary PID reuse. Per-session ignore list.
+- **Commit:** `feat(detector): detect orphaned shell-loop zombie pollers`
 
 ---
 

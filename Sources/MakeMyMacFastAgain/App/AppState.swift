@@ -22,6 +22,8 @@ final class AppState {
 
     var topProcesses: [AppProcessInfo] = []
     var zombieProcessCount: Int = 0
+    /// Detected runaway shell loops (orphaned pollers). Updated every refresh tick.
+    var zombiePollers: [ZombiePoller] = []
 
     var systemName: String = ""
     var macOSVersion: String = ""
@@ -114,6 +116,7 @@ final class AppState {
     let networkMonitor = NetworkMonitor()
     let processService = ProcessService()
     let notificationService = NotificationService()
+    let zombiePollerDetector = ZombiePollerDetector()
 
     // MARK: - Private
 
@@ -142,6 +145,7 @@ final class AppState {
         let interval = AppSettings.load().dashboardRefreshInterval
         logger.info("Restarting monitoring timer with interval \(interval)s")
         timer?.invalidate()
+        zombiePollerDetector.reset()
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.refresh()
@@ -179,6 +183,7 @@ final class AppState {
         let allProcesses = processService.listProcesses()
         topProcesses = Array(allProcesses.sorted { $0.memoryBytes > $1.memoryBytes }.prefix(5))
         zombieProcessCount = allProcesses.filter { $0.status == "Zombie" }.count
+        zombiePollers = zombiePollerDetector.ingest(processes: allProcesses)
 
         if !hasInitialData {
             hasInitialData = true

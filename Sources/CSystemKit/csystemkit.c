@@ -119,9 +119,76 @@ int csk_get_process_info(pid_t pid, CSKProcessInfo *info) {
         info->ppid = kp.kp_eproc.e_ppid;
         info->uid = kp.kp_eproc.e_ucred.cr_uid;
         info->status = kp.kp_proc.p_stat;
+        info->start_time_seconds = (int64_t)kp.kp_proc.p_starttime.tv_sec;
     }
 
     return 0;
+}
+
+int csk_get_process_args(pid_t pid, char *buf, int max_len) {
+    if (!buf || max_len <= 0) return -EINVAL;
+    buf[0] = '\0';
+
+    int mib_argmax[2] = { CTL_KERN, KERN_ARGMAX };
+    int argmax = 0;
+    size_t argmax_size = sizeof(argmax);
+    if (sysctl(mib_argmax, 2, &argmax, &argmax_size, NULL, 0) != 0) {
+        return -errno;
+    }
+    if (argmax <= 0) return -EIO;
+
+    char *procargs = (char *)malloc((size_t)argmax);
+    if (!procargs) return -ENOMEM;
+
+    int mib_args[3] = { CTL_KERN, KERN_PROCARGS2, pid };
+    size_t args_size = (size_t)argmax;
+    if (sysctl(mib_args, 3, procargs, &args_size, NULL, 0) != 0) {
+        int err = errno;
+        free(procargs);
+        return -err;
+    }
+    if (args_size < sizeof(int)) {
+        free(procargs);
+        return -EIO;
+    }
+
+    // Layout: [argc:int32][exec_path\0][null padding][argv0\0 argv1\0 ...][env...]
+    int argc = 0;
+    memcpy(&argc, procargs, sizeof(int));
+    if (argc < 0) {
+        free(procargs);
+        return -EIO;
+    }
+
+    char *p = procargs + sizeof(int);
+    char *end = procargs + args_size;
+
+    // Skip exec_path
+    while (p < end && *p != '\0') p++;
+    // Skip any trailing NUL padding
+    while (p < end && *p == '\0') p++;
+
+    int out_pos = 0;
+    int copied_args = 0;
+    while (p < end && copied_args < argc) {
+        // Copy argv[i] up to its terminating NUL
+        while (p < end && *p != '\0') {
+            if (out_pos < max_len - 1) {
+                buf[out_pos++] = *p;
+            }
+            p++;
+        }
+        // Skip the NUL terminator
+        if (p < end) p++;
+        copied_args++;
+        if (copied_args < argc && out_pos < max_len - 1) {
+            buf[out_pos++] = 0x1F; // unit separator between argv entries
+        }
+    }
+
+    buf[out_pos < max_len ? out_pos : max_len - 1] = '\0';
+    free(procargs);
+    return copied_args;
 }
 
 int csk_get_process_resource_usage(pid_t pid, CSKProcessResourceUsage *usage) {

@@ -59,11 +59,14 @@ final class ProcessService {
             processes.append(AppProcessInfo(
                 id: pid,
                 pid: pid,
+                ppid: info.ppid,
                 name: name,
                 user: user,
                 cpuUsage: cpuTime,
                 memoryBytes: memoryBytes,
-                status: processStatus(info.status)
+                status: processStatus(info.status),
+                startTime: info.start_time_seconds,
+                commandLine: readCommandLine(pid: pid)
             ))
         }
 
@@ -99,12 +102,33 @@ final class ProcessService {
         return AppProcessInfo(
             id: pid,
             pid: pid,
+            ppid: info.ppid,
             name: name,
             user: user,
             cpuUsage: cpuTime,
             memoryBytes: memoryBytes,
-            status: processStatus(info.status)
+            status: processStatus(info.status),
+            startTime: info.start_time_seconds,
+            commandLine: readCommandLine(pid: pid)
         )
+    }
+
+    /// Read a process's full command line via KERN_PROCARGS2 and join with spaces.
+    /// Returns an empty string when argv is unreadable (common for root-owned processes
+    /// when running without elevated privileges).
+    private func readCommandLine(pid: pid_t) -> String {
+        let bufferSize = 4096
+        var buffer = [CChar](repeating: 0, count: bufferSize)
+        let result = buffer.withUnsafeMutableBufferPointer { ptr -> Int32 in
+            csk_get_process_args(pid, ptr.baseAddress, Int32(bufferSize))
+        }
+        guard result > 0 else { return "" }
+        let raw = buffer.withUnsafeBufferPointer { ptr -> String in
+            guard let base = ptr.baseAddress else { return "" }
+            return String(cString: base)
+        }
+        // csystemkit.c joins argv entries with 0x1F (unit separator).
+        return raw.replacingOccurrences(of: "\u{1F}", with: " ")
     }
 
     /// Build a PID-to-localized-name mapping from NSWorkspace running applications
