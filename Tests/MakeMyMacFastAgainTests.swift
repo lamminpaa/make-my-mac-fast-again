@@ -170,3 +170,54 @@ struct ProcessServiceTests {
         #expect(!namedProcesses.isEmpty)
     }
 }
+
+@Suite("Cache Cleaner Tests")
+struct CacheCleanerTests {
+    @Test("CacheCleanupCommand defaults timeout to 60s")
+    func cleanupCommandDefaultTimeout() {
+        let cmd = CacheCleanupCommand(executable: "/usr/bin/xcrun", arguments: ["simctl"])
+        #expect(cmd.timeout == 60)
+    }
+
+    @Test("CacheCategory defaults cleanupCommand to nil (path-based cleanup)")
+    func categoryDefaultsToPathCleanup() {
+        let category = CacheCategory(
+            name: "Test",
+            description: "",
+            paths: ["/tmp/nonexistent"],
+            requiresAdmin: false
+        )
+        #expect(category.cleanupCommand == nil)
+    }
+
+    @Test("CacheCategory accepts cleanupCommand override")
+    func categoryAcceptsCustomCleanup() {
+        let command = CacheCleanupCommand(
+            executable: "/usr/bin/xcrun",
+            arguments: ["simctl", "delete", "unavailable"],
+            timeout: 120
+        )
+        let category = CacheCategory(
+            name: "iOS Sims",
+            description: "",
+            paths: ["/tmp/x"],
+            requiresAdmin: false,
+            cleanupCommand: command
+        )
+        #expect(category.cleanupCommand?.executable == "/usr/bin/xcrun")
+        #expect(category.cleanupCommand?.arguments == ["simctl", "delete", "unavailable"])
+        #expect(category.cleanupCommand?.timeout == 120)
+    }
+
+    @Test("Default categories include iOS simulator cleanup wired to xcrun simctl")
+    @MainActor
+    func defaultCategoriesIncludeIOSSimulators() {
+        let vm = CacheCleanerViewModel()
+        vm.loadCategories()
+        let sim = vm.categories.first { $0.name.contains("iOS Simulators") }
+        #expect(sim != nil)
+        #expect(sim?.cleanupCommand?.executable == "/usr/bin/xcrun")
+        #expect(sim?.cleanupCommand?.arguments == ["simctl", "delete", "unavailable"])
+        #expect(sim?.requiresAdmin == false)
+    }
+}
