@@ -101,6 +101,10 @@ These items come from an actual debugging session where a user's Mac had load av
 - **What:** New "Launched by" column in `ProcessManagerView` showing the immediate parent as `name (pid)`, with a `.help()` tooltip that renders the full ancestor chain (name, pid, command line per level). New `SortOrder.parentTree` case sorts rows depth-first so children sit contiguously under their parents. Selecting a row reveals an ancestor-chain strip beneath the table showing the full tree top-down with command lines.
 - **Commit:** `feat(process-manager): show parent-process chain and parent-tree sort`
 
+### ~~TODO 20: Startup Items Optimizer~~ DONE
+- **What:** New `StartupItemClassifier` with curated allow-list (Apple-system / safety-critical / convenience / unknown) feeds a modal `StartupOptimizerSheet` that only proposes `convenience` + `unknown` items. Convenience pre-selected; unknown requires explicit opt-in. One-click Undo restores the last batch. Category badges now visible in the main Startup Items list. Conservative-by-default: nothing auto-applies; user must open the sheet and confirm. `isOptimizerBusy` flag blocks overlapping apply/undo calls.
+- **Commit:** `feat(startup): curated optimizer with safety categories, preview sheet, and undo`
+
 ### ~~TODO 19: Runaway Loop / Zombie Poller Detection (signature feature)~~ DONE
 - **What:** New "Zombie Pollers" sidebar item + compact Dashboard card. `ZombiePollerDetector` keeps a 60-sample (~2 min) sliding window of child PIDs per candidate shell parent and flags `sh`/`bash`/`zsh -c` processes whose command matches `(while|until|for) .* sleep` once ≥3 distinct children have rotated through the window. Age gate: 60 s minimum. Kill action verifies both `name` *and* `startTime` to defeat same-binary PID reuse. Per-session ignore list.
 - **Commit:** `feat(detector): detect orphaned shell-loop zombie pollers`

@@ -12,10 +12,22 @@ struct StartupItemsView: View {
                         .controlSize(.small)
                 }
 
+                if !viewModel.lastOptimization.isEmpty {
+                    Button("Undo (\(viewModel.lastOptimization.count))") {
+                        Task { await viewModel.undoLastOptimization() }
+                    }
+                    .disabled(viewModel.isLoading || viewModel.isOptimizerBusy)
+                }
+
+                Button("Optimize...") {
+                    viewModel.isOptimizerPresented = true
+                }
+                .disabled(viewModel.isLoading || viewModel.isOptimizerBusy || viewModel.optimizationCandidates.isEmpty)
+
                 Button("Reload") {
                     Task { await viewModel.loadItems() }
                 }
-                .disabled(viewModel.isLoading)
+                .disabled(viewModel.isLoading || viewModel.isOptimizerBusy)
             }
 
             if viewModel.items.isEmpty && !viewModel.isLoading {
@@ -51,6 +63,19 @@ struct StartupItemsView: View {
             }
             await viewModel.loadItems()
         }
+        .sheet(isPresented: $viewModel.isOptimizerPresented) {
+            StartupOptimizerSheet(
+                candidates: viewModel.optimizationCandidates,
+                initialSelection: viewModel.defaultPreselection(),
+                onApply: { selection in
+                    viewModel.isOptimizerPresented = false
+                    Task { await viewModel.applyOptimization(selection) }
+                },
+                onCancel: {
+                    viewModel.isOptimizerPresented = false
+                }
+            )
+        }
     }
 
     private func startupRow(_ item: StartupItem) -> some View {
@@ -67,6 +92,7 @@ struct StartupItemsView: View {
                         .font(.body.bold())
 
                     impactBadge(for: item.label)
+                    categoryBadge(item.category)
                 }
                 Text(item.label)
                     .font(.caption)
@@ -111,6 +137,27 @@ struct StartupItemsView: View {
         case "High": return .red
         case "Medium": return .orange
         default: return .green
+        }
+    }
+
+    @ViewBuilder
+    private func categoryBadge(_ category: StartupCategory) -> some View {
+        Text(category.shortLabel)
+            .font(.caption2.bold())
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(categoryColor(category).opacity(0.15))
+            .foregroundStyle(categoryColor(category))
+            .clipShape(Capsule())
+            .help(category.explanation)
+    }
+
+    private func categoryColor(_ category: StartupCategory) -> Color {
+        switch category {
+        case .appleSystem: return .gray
+        case .safetyCritical: return .red
+        case .convenience: return .blue
+        case .unknown: return .orange
         }
     }
 }

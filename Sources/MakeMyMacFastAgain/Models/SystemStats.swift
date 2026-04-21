@@ -189,6 +189,7 @@ struct StartupItem: Identifiable, Sendable {
     let label: String
     var isEnabled: Bool
     let type: StartupItemType
+    var category: StartupCategory = .unknown
 }
 
 enum StartupItemType: String, Sendable {
