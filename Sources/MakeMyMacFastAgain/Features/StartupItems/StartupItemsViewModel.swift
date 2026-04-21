@@ -12,6 +12,24 @@ final class StartupItemsViewModel {
     var runningStatus: [String: Bool] = [:]
     var impactLevel: [String: String] = [:]
 
+    // Optimizer state.
+    var isOptimizerPresented = false
+    /// True while `applyOptimization` or `undoLastOptimization` is in flight.
+    /// The view uses this to disable the Optimize/Undo buttons to prevent
+    /// overlapping concurrent operations from racing on `items`.
+    var isOptimizerBusy = false
+    /// Most recent successful optimization, kept in-memory so the user can
+    /// undo with a single click. Cleared when the view reloads.
+    var lastOptimization: [OptimizationEntry] = []
+
+    struct OptimizationEntry: Sendable, Identifiable {
+        let id = UUID()
+        let label: String
+        let name: String
+        let type: StartupItemType
+        let previousEnabled: Bool
+    }
+
     private weak var appState: AppState?
     private let shell = ShellExecutor()
     private let privilegedExecutor = PrivilegedExecutor()
@@ -25,6 +43,7 @@ final class StartupItemsViewModel {
         items = []
         runningStatus = [:]
         impactLevel = [:]
+        lastOptimization = []
 
         let loadedLabels = await getLoadedLabels()
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -103,14 +122,120 @@ final class StartupItemsViewModel {
                 impactLevel[label] = "Low"
             }
 
+            let category = StartupItemClassifier.classify(label: label, path: fullPath, type: type)
+
             items.append(StartupItem(
                 name: name.capitalized,
                 path: fullPath,
                 label: label,
                 isEnabled: !disabled && isLoaded,
-                type: type
+                type: type,
+                category: category
             ))
         }
+    }
+
+    /// Items the optimizer is willing to propose disabling. `.appleSystem`
+    /// and `.safetyCritical` are filtered out unconditionally; already-disabled
+    /// items are skipped since there's nothing to optimize.
+    var optimizationCandidates: [StartupItem] {
+        items.filter { item in
+            guard item.isEnabled else { return false }
+            return item.category == .convenience || item.category == .unknown
+        }
+    }
+
+    /// Default pre-selection for the optimizer sheet. Only pre-selects
+    /// `.convenience` — `.unknown` requires explicit user opt-in.
+    func defaultPreselection() -> Set<UUID> {
+        Set(optimizationCandidates.filter { $0.category == .convenience }.map(\.id))
+    }
+
+    /// Disable every item whose UUID is in `selectedIDs`. Records the reverse
+    /// operation in `lastOptimization` so the user can undo. Errors on any
+    /// individual item are logged but don't abort the batch.
+    func applyOptimization(_ selectedIDs: Set<UUID>) async {
+        guard !selectedIDs.isEmpty else { return }
+        guard !isOptimizerBusy else {
+            logger.info("applyOptimization ignored: optimizer already busy")
+            return
+        }
+        isOptimizerBusy = true
+        defer { isOptimizerBusy = false }
+
+        var undo: [OptimizationEntry] = []
+        var succeeded = 0
+        var failed = 0
+
+        for item in items where selectedIDs.contains(item.id) {
+            let previousEnabled = item.isEnabled
+            guard previousEnabled else { continue }
+
+            let before = item.isEnabled
+            await toggleItem(item)
+            let after = items.first(where: { $0.id == item.id })?.isEnabled ?? before
+
+            if after != before {
+                undo.append(OptimizationEntry(
+                    label: item.label,
+                    name: item.name,
+                    type: item.type,
+                    previousEnabled: previousEnabled
+                ))
+                succeeded += 1
+            } else {
+                failed += 1
+            }
+        }
+
+        lastOptimization = undo
+
+        if failed == 0 {
+            statusMessage = "Disabled \(succeeded) startup item\(succeeded == 1 ? "" : "s")."
+        } else {
+            statusMessage = "Disabled \(succeeded), \(failed) failed. See console for details."
+        }
+        logger.info("Optimization: \(succeeded, privacy: .public) disabled, \(failed, privacy: .public) failed")
+        reportToAppState()
+    }
+
+    /// Re-enable every item captured in `lastOptimization`, in reverse order.
+    func undoLastOptimization() async {
+        guard !lastOptimization.isEmpty else { return }
+        guard !isOptimizerBusy else {
+            logger.info("undoLastOptimization ignored: optimizer already busy")
+            return
+        }
+        isOptimizerBusy = true
+        defer { isOptimizerBusy = false }
+
+        let entries = lastOptimization
+        var restored = 0
+        var skipped = 0
+
+        for entry in entries.reversed() {
+            guard let item = items.first(where: { $0.label == entry.label && $0.type == entry.type }) else {
+                skipped += 1
+                continue
+            }
+            if item.isEnabled {
+                // User manually re-enabled it between apply and undo.
+                logger.info("Undo skipping \(entry.label, privacy: .public): already enabled")
+                skipped += 1
+                continue
+            }
+            await toggleItem(item)
+            restored += 1
+        }
+
+        if skipped == 0 {
+            statusMessage = "Restored \(restored) startup item\(restored == 1 ? "" : "s")."
+        } else {
+            statusMessage = "Restored \(restored), skipped \(skipped) (state changed since apply)."
+        }
+        lastOptimization = []
+        logger.info("Undo: restored \(restored, privacy: .public), skipped \(skipped, privacy: .public)")
+        reportToAppState()
     }
 
     func checkRunningStatus() async {

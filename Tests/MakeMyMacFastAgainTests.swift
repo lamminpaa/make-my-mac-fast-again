@@ -318,6 +318,176 @@ struct ParentChainTests {
     }
 }
 
+@Suite("Startup Item Classifier Tests")
+struct StartupItemClassifierTests {
+    @Test("Apple-prefixed labels are appleSystem")
+    func applePrefixedIsAppleSystem() {
+        #expect(StartupItemClassifier.classify(
+            label: "com.apple.cfprefsd.xpc.agent",
+            path: "/System/Library/LaunchAgents/com.apple.cfprefsd.plist",
+            type: .globalAgent
+        ) == .appleSystem)
+    }
+
+    @Test("Karabiner / keyboard remappers are safety-critical")
+    func keyboardRemapperIsCritical() {
+        #expect(StartupItemClassifier.classify(
+            label: "org.pqrs.karabiner.karabiner_console_user_server",
+            path: "/Library/LaunchAgents/org.pqrs.karabiner.plist",
+            type: .globalAgent
+        ) == .safetyCritical)
+    }
+
+    @Test("Little Snitch is safety-critical")
+    func littleSnitchIsCritical() {
+        #expect(StartupItemClassifier.classify(
+            label: "at.obdev.LittleSnitchHelper",
+            path: "/Library/LaunchDaemons/at.obdev.LittleSnitchHelper.plist",
+            type: .globalDaemon
+        ) == .safetyCritical)
+    }
+
+    @Test("1Password is safety-critical")
+    func onePasswordIsCritical() {
+        #expect(StartupItemClassifier.classify(
+            label: "com.1password.1password-launcher",
+            path: "/Users/kalle/Library/LaunchAgents/com.1password.1password-launcher.plist",
+            type: .userAgent
+        ) == .safetyCritical)
+    }
+
+    @Test("Slack auto-updater is convenience")
+    func slackIsConvenience() {
+        #expect(StartupItemClassifier.classify(
+            label: "com.slack.helper",
+            path: "/Users/kalle/Library/LaunchAgents/com.slack.helper.plist",
+            type: .userAgent
+        ) == .convenience)
+    }
+
+    @Test("Google Keystone updater is convenience")
+    func googleKeystoneIsConvenience() {
+        #expect(StartupItemClassifier.classify(
+            label: "com.google.keystone.agent",
+            path: "/Users/kalle/Library/LaunchAgents/com.google.keystone.agent.plist",
+            type: .userAgent
+        ) == .convenience)
+    }
+
+    @Test("Unknown third-party label falls through to unknown")
+    func unknownFallsThrough() {
+        #expect(StartupItemClassifier.classify(
+            label: "com.example.mystery-helper",
+            path: "/Users/kalle/Library/LaunchAgents/com.example.mystery-helper.plist",
+            type: .userAgent
+        ) == .unknown)
+    }
+
+    @Test("Exact-match override wins over prefix rule")
+    func exactMatchWins() {
+        // com.docker.* prefix would be unknown, but com.docker.vmnetd is
+        // explicitly safety-critical via the exactMatches table.
+        #expect(StartupItemClassifier.classify(
+            label: "com.docker.vmnetd",
+            path: "/Library/LaunchDaemons/com.docker.vmnetd.plist",
+            type: .globalDaemon
+        ) == .safetyCritical)
+    }
+}
+
+@Suite("Startup Optimizer Tests")
+struct StartupOptimizerTests {
+    private func makeItem(
+        label: String,
+        category: StartupCategory,
+        enabled: Bool = true,
+        type: StartupItemType = .userAgent
+    ) -> StartupItem {
+        StartupItem(
+            name: label.components(separatedBy: ".").last ?? label,
+            path: "/tmp/\(label).plist",
+            label: label,
+            isEnabled: enabled,
+            type: type,
+            category: category
+        )
+    }
+
+    @Test("Candidates exclude appleSystem and safetyCritical")
+    @MainActor
+    func candidatesExcludeProtected() {
+        let vm = StartupItemsViewModel()
+        vm.items = [
+            makeItem(label: "com.apple.cfprefsd", category: .appleSystem),
+            makeItem(label: "at.obdev.LittleSnitchHelper", category: .safetyCritical),
+            makeItem(label: "com.slack.helper", category: .convenience),
+            makeItem(label: "com.example.mystery", category: .unknown),
+        ]
+
+        let labels = vm.optimizationCandidates.map(\.label)
+        #expect(labels.sorted() == ["com.example.mystery", "com.slack.helper"])
+    }
+
+    @Test("Candidates exclude already-disabled items")
+    @MainActor
+    func candidatesExcludeDisabled() {
+        let vm = StartupItemsViewModel()
+        vm.items = [
+            makeItem(label: "com.slack.helper", category: .convenience, enabled: false),
+            makeItem(label: "com.spotify.helper", category: .convenience, enabled: true),
+        ]
+
+        #expect(vm.optimizationCandidates.map(\.label) == ["com.spotify.helper"])
+    }
+
+    @Test("Default preselection picks only convenience items")
+    @MainActor
+    func defaultPreselectionConvenienceOnly() {
+        let vm = StartupItemsViewModel()
+        let convenience = makeItem(label: "com.slack.helper", category: .convenience)
+        let unknown = makeItem(label: "com.example.mystery", category: .unknown)
+        vm.items = [convenience, unknown]
+
+        let preselected = vm.defaultPreselection()
+        #expect(preselected == [convenience.id])
+    }
+
+    @Test("Busy flag blocks overlapping apply calls")
+    @MainActor
+    func applyRespectsBusyFlag() async {
+        let vm = StartupItemsViewModel()
+        let item = makeItem(label: "com.slack.helper", category: .convenience)
+        vm.items = [item]
+        vm.isOptimizerBusy = true // simulate in-flight operation
+
+        await vm.applyOptimization([item.id])
+
+        // The item should NOT have been touched because the busy flag blocked the call.
+        #expect(vm.items.first?.isEnabled == true)
+        #expect(vm.lastOptimization.isEmpty)
+    }
+
+    @Test("Busy flag blocks overlapping undo calls")
+    @MainActor
+    func undoRespectsBusyFlag() async {
+        let vm = StartupItemsViewModel()
+        vm.lastOptimization = [
+            StartupItemsViewModel.OptimizationEntry(
+                label: "com.slack.helper",
+                name: "Helper",
+                type: .userAgent,
+                previousEnabled: true
+            )
+        ]
+        vm.isOptimizerBusy = true
+
+        await vm.undoLastOptimization()
+
+        // Undo bailed out without clearing the history.
+        #expect(!vm.lastOptimization.isEmpty)
+    }
+}
+
 @Suite("Load Average Tests")
 struct LoadAverageTests {
     @Test("getloadavg returns non-negative values")
